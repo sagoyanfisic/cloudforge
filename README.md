@@ -339,6 +339,95 @@ with Diagram("Multi-Region Setup", show=False):
     us_db >> eu_db
 ```
 
+## 🎨 Ejemplo Completo: Arquitectura Multi-Región
+
+A continuación se muestra un ejemplo completo que genera un diagrama profesional de arquitectura multi-región con DNS global, CDN y servicios distribuidos:
+
+### Código Python
+
+```python
+import os
+from diagrams import Diagram, Cluster, Edge
+from diagrams.aws.compute import Lambda, EC2
+from diagrams.aws.database import Dynamodb, RDS
+from diagrams.aws.network import Route53, CloudFront
+
+# Asegurar que el directorio de salida existe
+os.makedirs("examples", exist_ok=True)
+
+with Diagram(
+    "Multi-Region Application",
+    show=False,
+    filename="examples/multi_region",
+    direction="TB"
+):
+    # Servicios globales
+    dns = Route53("Global DNS")
+    cdn = CloudFront("CloudFront CDN")
+
+    # Región US-EAST-1
+    with Cluster("US-EAST-1"):
+        with Cluster("Compute"):
+            us_lambda = Lambda("Lambda")
+            us_ec2 = EC2("EC2 Instances")
+
+        with Cluster("Storage"):
+            us_db = Dynamodb("DynamoDB")
+            us_rds = RDS("RDS Primary")
+
+    # Región EU-WEST-1
+    with Cluster("EU-WEST-1"):
+        with Cluster("Compute"):
+            eu_lambda = Lambda("Lambda")
+            eu_ec2 = EC2("EC2 Instances")
+
+        with Cluster("Storage"):
+            eu_db = Dynamodb("DynamoDB")
+            eu_rds = RDS("RDS Replica")
+
+    # Conexiones globales
+    dns >> [cdn, us_lambda, eu_lambda]
+
+    # Relaciones regionales
+    us_lambda >> us_ec2
+    us_ec2 >> us_db
+    us_rds >> eu_rds
+
+    eu_lambda >> eu_ec2
+    eu_ec2 >> eu_db
+
+    # Replicación cross-region
+    us_db >> eu_db
+
+print("✅ Diagrama generado: examples/multi_region.png")
+```
+
+### Diagrama Resultante
+
+El código anterior genera una arquitectura profesional que incluye:
+
+- **DNS Global**: Route53 como punto de entrada global
+- **CDN**: CloudFront para distribución de contenido
+- **Compute distribuido**: Lambda y EC2 en dos regiones
+- **Persistencia**: DynamoDB y RDS en ambas regiones
+- **Replicación**: Sincronización entre regiones
+
+**Formatos de salida generados:**
+- `multi_region.png` - Imagen raster (predeterminado)
+- `multi_region.pdf` - Formato vectorial (si está habilitado)
+- `multi_region.svg` - Gráficos vectoriales escalables (si está habilitado)
+
+### Ejecutar el Ejemplo
+
+```bash
+# Localmente
+python examples/multi_region.py
+
+# Con Docker
+docker run -v $(pwd)/examples:/app/examples cloudforge:latest \
+  python examples/multi_region.py
+```
+
 ## Troubleshooting
 
 ### Error: "GraphViz not found"
