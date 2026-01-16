@@ -1,61 +1,85 @@
-# AWS Diagram MCP Server (Extended)
+# 🔥 CloudForge
 
-Una extensión mejorada del MCP Server oficial de AWS para generar diagramas de arquitectura con validación y almacenamiento integrado.
+**AI-Powered AWS Architecture Diagrams with Validation & Persistence**
 
-## Características
+[![Python](https://img.shields.io/badge/Python-3.10%2B-blue)](https://www.python.org)
+[![Docker](https://img.shields.io/badge/Docker-Yes-brightgreen)](https://www.docker.com)
+[![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
+[![MCP](https://img.shields.io/badge/Protocol-MCP-purple)](https://modelcontextprotocol.io)
 
-✨ **Generación de Diagramas AWS**
-- Crear diagramas de arquitectura usando Python DSL
-- Soporte para múltiples formatos (PNG, PDF, SVG)
-- Componentes AWS prevalidados
+CloudForge is an intelligent MCP server that transforms Python code into professional AWS architecture diagrams with built-in validation and persistent storage.
 
-🔍 **Validación de Diagramas**
-- Validación de sintaxis Python
-- Verificación de componentes AWS válidos
-- Análisis de seguridad del código
-- Límites configurables (componentes, relaciones)
+## ✨ Features
 
-💾 **Almacenamiento Persistente**
-- Guardar diagramas generados
-- Organización con etiquetas
-- Búsqueda y filtrado
-- Historial de cambios con timestamps
-- Checksums SHA256 para integridad
+### 🎨 Diagram Generation
+- Create AWS architecture diagrams from Python code
+- Support for 50+ AWS components (EC2, Lambda, RDS, S3, etc.)
+- Multiple output formats: PNG, PDF, SVG
+- Professional visualization with GraphViz
 
-## Instalación
+### ✓ Intelligent Validation
+- Python syntax validation using AST parsing
+- AWS component whitelisting
+- Security scanning (detects dangerous functions)
+- Component relationship analysis
+- Configurable limits (components, relationships)
 
-### Requisitos Previos
+### 💾 Persistent Storage
+- Save diagrams with metadata
+- Tag-based organization and filtering
+- SHA256 checksum verification
+- JSON-based indexing for fast retrieval
+- Full CRUD operations
+
+### 🔍 Multi-Account Architecture Support
+- Hub-and-spoke patterns
+- PrivateLink connectivity
+- Cross-region deployments
+- Centralized monitoring
+
+### 📊 Enterprise Ready
+- FastMCP implementation (modern MCP protocol)
+- Pydantic data validation
+- Docker containerization with UV package manager
+- Comprehensive logging and error handling
+
+## 🚀 Quick Start
+
+### Prerequisites
 
 - Python 3.10+
-- GraphViz (para la generación de diagramas)
-- uv (gestor de paquetes de Astral)
+- GraphViz (diagram rendering engine)
+- Docker (optional)
 
-### MacOS
+### macOS Installation
 
 ```bash
-# Instalar GraphViz
+# Install GraphViz
 brew install graphviz
 
-# Instalar uv
+# Install UV package manager
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# Clonar el repositorio
+# Clone repository
 cd /Users/yancelsalinas/Documents/claude-code/mcp-aws
 
-# Instalar dependencias
+# Install dependencies
 uv pip install -e .
 ```
 
-### Docker
+### Docker Installation
 
 ```bash
-docker build -t aws-diagram-mcp .
-docker run -it aws-diagram-mcp
+# Build image
+docker build -t cloudforge:latest .
+
+# Run container
+docker run -it cloudforge:latest python -m src
 ```
 
-## Uso
+## 📖 Usage Guide
 
-### 1. Generar un Diagrama
+### 1. Generate a Diagram
 
 ```python
 from diagrams import Diagram
@@ -71,72 +95,72 @@ with Diagram("Serverless App", show=False):
     api >> function >> database
 ```
 
-### 2. Validar Código
+### 2. Validate Diagram Code
 
-Antes de generar un diagrama, valida el código:
+Before generating, validate your diagram code:
 
-- **Sintaxis**: Se verifica que el código Python sea válido
-- **Componentes**: Se validan los componentes AWS utilizados
-- **Seguridad**: Se detectan funciones peligrosas (exec, eval, etc.)
-- **Límites**: Se verifica el número máximo de componentes y relaciones
+- **Syntax**: Verifies valid Python code
+- **Components**: Validates AWS service names
+- **Security**: Detects dangerous functions (exec, eval, etc.)
+- **Limits**: Enforces max components and relationships
 
-### 3. Almacenar Diagramas
+### 3. Store Diagrams
 
-Los diagramas se almacenan automáticamente en:
+Diagrams are automatically stored in:
 ```
 ~/.aws_diagrams/
-├── diagrams/          # Archivos de salida (PNG, PDF, SVG)
-├── metadata/          # Información de metadatos
-└── index.json         # Índice de diagramas
+├── diagrams/          # Output files (PNG, PDF, SVG)
+├── metadata/          # Metadata information
+└── index.json         # Diagram index
 ```
 
-### 4. Gestionar Diagramas Guardados
+### 4. Manage Saved Diagrams
 
-**Listar diagramas:**
+**List diagrams:**
 ```bash
 aws-diagram list
 ```
 
-**Filtrar por etiqueta:**
+**Filter by tag:**
 ```bash
 aws-diagram list --tag production
 ```
 
-**Obtener detalles:**
+**Get details:**
 ```bash
 aws-diagram get <diagram_id>
 ```
 
-**Eliminar:**
+**Delete:**
 ```bash
 aws-diagram delete <diagram_id>
 ```
 
-## Configuración
+## ⚙️ Configuration
 
-### Variables de Entorno
+### Environment Variables
 
 ```bash
-# Ruta de almacenamiento
+# Storage path
 AWS_DIAGRAM_DIAGRAMS_STORAGE_PATH=/custom/path
 
-# Tamaño máximo (MB)
+# Max file size (MB)
 AWS_DIAGRAM_MAX_DIAGRAM_SIZE_MB=100
 
-# Formatos de salida
+# Output formats
 AWS_DIAGRAM_OUTPUT_FORMATS=png,pdf,svg
 
-# Límites de validación
+# Validation limits
 AWS_DIAGRAM_MAX_COMPONENTS=100
 AWS_DIAGRAM_MAX_RELATIONSHIPS=200
 
-# Nivel de logging
+# Logging level
 AWS_DIAGRAM_LOG_LEVEL=INFO
 ```
 
-### Archivo de Configuración
+### Configuration File
 
-Crear `~/.aws_diagrams/config.yaml`:
+Create `~/.aws_diagrams/config.yaml`:
 
 ```yaml
 storage:
@@ -155,124 +179,72 @@ output:
     - svg
 ```
 
-## API MCP Tools
+## 🔌 MCP Tools
 
 ### 1. `generate_diagram`
 
-Genera un diagrama a partir de código Python.
+Generate an AWS architecture diagram from Python code.
 
-**Parámetros:**
-- `code` (string, requerido): Código Python con DSL de diagrams
-- `name` (string, requerido): Nombre del diagrama
-- `description` (string, opcional): Descripción
-- `validate` (boolean, opcional): Validar antes de generar (default: true)
+**Parameters:**
+- `code` (string, required): Python code using diagrams DSL
+- `name` (string, required): Diagram name
+- `description` (string, optional): Diagram description
+- `validate` (boolean, optional): Validate before generating (default: true)
 
-**Respuesta:**
-- `success`: Booleano indicando éxito
-- `diagram_id`: ID único del diagrama
-- `file_path`: Ruta del archivo generado
-- `output_formats`: Formatos disponibles
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Diagram generated successfully",
+  "output_files": {
+    "png": "/path/to/diagram.png",
+    "pdf": "/path/to/diagram.pdf"
+  }
+}
+```
 
 ### 2. `validate_diagram`
 
-Valida el código de un diagrama sin generarlo.
+Validate diagram code without generating output.
 
-**Parámetros:**
-- `code` (string, requerido): Código Python a validar
+**Parameters:**
+- `code` (string, required): Python code to validate
 
-**Respuesta:**
-- `is_valid`: Booleano de validación
-- `errors`: Lista de errores
-- `warnings`: Lista de advertencias
-- `component_count`: Número de componentes
-- `relationship_count`: Número de relaciones
-
-### 3. `save_diagram`
-
-Guarda un diagrama con metadatos y etiquetas.
-
-**Parámetros:**
-- `diagram_id` (string, requerido): ID del diagrama a guardar
-- `tags` (array, opcional): Etiquetas para organización
-
-### 4. `list_diagrams`
-
-Lista todos los diagramas guardados.
-
-**Parámetros:**
-- `tag` (string, opcional): Filtrar por etiqueta
-
-**Respuesta:**
-- Array de diagramas con metadatos
-
-### 5. `get_diagram`
-
-Obtiene un diagrama específico con detalles completos.
-
-**Parámetros:**
-- `diagram_id` (string, requerido): ID del diagrama
-
-### 6. `delete_diagram`
-
-Elimina un diagrama guardado.
-
-**Parámetros:**
-- `diagram_id` (string, requerido): ID del diagrama a eliminar
-
-## Tests
-
-Ejecutar los tests:
-
-```bash
-# Todos los tests
-pytest -xvs tests/
-
-# Tests específicos
-pytest -xvs tests/test_validator.py
-pytest -xvs tests/test_storage.py
-
-# Con cobertura
-pytest --cov=src --cov-report=html tests/
+**Response:**
+```json
+{
+  "is_valid": true,
+  "component_count": 5,
+  "relationship_count": 4,
+  "errors": [],
+  "warnings": []
+}
 ```
 
-## Componentes AWS Soportados
+### 3. `list_diagrams`
 
-### Compute
-- `Lambda` - AWS Lambda
-- `EC2` - Amazon EC2
-- `ECS` - Amazon ECS
-- `EKS` - Amazon EKS
-- `AutoScaling` - Auto Scaling
+List all saved diagrams.
 
-### Networking
-- `APIGateway` - API Gateway
-- `Route53` - Route 53
-- `CloudFront` - CloudFront
-- `VPC` - VPC
-- `SecurityGroup` - Security Groups
-- `ELB`, `ALB`, `NLB` - Load Balancers
+**Parameters:**
+- `tag` (string, optional): Filter by tag
 
-### Storage
-- `S3` - Amazon S3
-- `Dynamodb` - DynamoDB
-- `RDS` - RDS Database
-- `ElastiCache` - ElastiCache
+### 4. `get_diagram`
 
-### Integration
-- `SQS` - SQS Queue
-- `SNS` - SNS Topic
-- `CodePipeline` - CodePipeline
-- `CodeBuild` - CodeBuild
-- `CodeDeploy` - CodeDeploy
+Get specific diagram details.
 
-### Management
-- `CloudWatch` - CloudWatch
-- `IAM` - IAM
-- `KMS` - KMS
+**Parameters:**
+- `diagram_id` (string, required): Diagram ID
 
-## Ejemplos
+### 5. `delete_diagram`
 
-### Ejemplo 1: Arquitectura Serverless
+Delete a saved diagram.
+
+**Parameters:**
+- `diagram_id` (string, required): Diagram ID to delete
+
+## 📚 Examples
+
+### Example 1: Serverless Architecture
 
 ```python
 from diagrams import Diagram
@@ -293,7 +265,7 @@ with Diagram("Serverless Architecture", show=False):
     lambda_fn >> queue >> processor >> db
 ```
 
-### Ejemplo 2: Arquitectura con Microservicios
+### Example 2: Microservices Architecture
 
 ```python
 from diagrams import Diagram, Cluster
@@ -318,41 +290,17 @@ with Diagram("Microservices Architecture", show=False):
     service2 >> db1 >> db2
 ```
 
-### Ejemplo 3: Multi-Region
+### Example 3: Multi-Region Architecture
 
-```python
-from diagrams import Diagram, Cluster
-from diagrams.aws.compute import Lambda
-from diagrams.aws.database import Dynamodb
-
-with Diagram("Multi-Region Setup", show=False):
-    with Cluster("US-EAST-1"):
-        us_lambda = Lambda("Function")
-        us_db = Dynamodb("Database")
-        us_lambda >> us_db
-
-    with Cluster("EU-WEST-1"):
-        eu_lambda = Lambda("Function")
-        eu_db = Dynamodb("Database")
-        eu_lambda >> eu_db
-
-    us_db >> eu_db
-```
-
-## 🎨 Ejemplo Completo: Arquitectura Multi-Región
-
-A continuación se muestra un ejemplo completo que genera un diagrama profesional de arquitectura multi-región con DNS global, CDN y servicios distribuidos:
-
-### Código Python
+![Multi-Region Application Architecture](images/multi-region-example.png)
 
 ```python
 import os
-from diagrams import Diagram, Cluster, Edge
+from diagrams import Diagram, Cluster
 from diagrams.aws.compute import Lambda, EC2
 from diagrams.aws.database import Dynamodb, RDS
 from diagrams.aws.network import Route53, CloudFront
 
-# Asegurar que el directorio de salida existe
 os.makedirs("examples", exist_ok=True)
 
 with Diagram(
@@ -361,11 +309,11 @@ with Diagram(
     filename="examples/multi_region",
     direction="TB"
 ):
-    # Servicios globales
+    # Global services
     dns = Route53("Global DNS")
     cdn = CloudFront("CloudFront CDN")
 
-    # Región US-EAST-1
+    # US-EAST-1 Region
     with Cluster("US-EAST-1"):
         with Cluster("Compute"):
             us_lambda = Lambda("Lambda")
@@ -375,7 +323,7 @@ with Diagram(
             us_db = Dynamodb("DynamoDB")
             us_rds = RDS("RDS Primary")
 
-    # Región EU-WEST-1
+    # EU-WEST-1 Region
     with Cluster("EU-WEST-1"):
         with Cluster("Compute"):
             eu_lambda = Lambda("Lambda")
@@ -385,10 +333,10 @@ with Diagram(
             eu_db = Dynamodb("DynamoDB")
             eu_rds = RDS("RDS Replica")
 
-    # Conexiones globales
+    # Global routing
     dns >> [cdn, us_lambda, eu_lambda]
 
-    # Relaciones regionales
+    # Regional relationships
     us_lambda >> us_ec2
     us_ec2 >> us_db
     us_rds >> eu_rds
@@ -396,44 +344,147 @@ with Diagram(
     eu_lambda >> eu_ec2
     eu_ec2 >> eu_db
 
-    # Replicación cross-region
+    # Cross-region replication
     us_db >> eu_db
 
-print("✅ Diagrama generado: examples/multi_region.png")
+print("✅ Diagram generated: examples/multi_region.png")
 ```
 
-### Diagrama Resultante
-
-El código anterior genera una arquitectura profesional que incluye:
-
-- **DNS Global**: Route53 como punto de entrada global
-- **CDN**: CloudFront para distribución de contenido
-- **Compute distribuido**: Lambda y EC2 en dos regiones
-- **Persistencia**: DynamoDB y RDS en ambas regiones
-- **Replicación**: Sincronización entre regiones
-
-**Formatos de salida generados:**
-- `multi_region.png` - Imagen raster (predeterminado)
-- `multi_region.pdf` - Formato vectorial (si está habilitado)
-- `multi_region.svg` - Gráficos vectoriales escalables (si está habilitado)
-
-### Ejecutar el Ejemplo
+**Run the example:**
 
 ```bash
-# Localmente
+# Locally
 python examples/multi_region.py
 
-# Con Docker
+# Docker
 docker run -v $(pwd)/examples:/app/examples cloudforge:latest \
   python examples/multi_region.py
 ```
 
-## Troubleshooting
+## 🏗️ Environment Setup
 
-### Error: "GraphViz not found"
+### Development Installation
 
 ```bash
-# MacOS
+# Install development dependencies
+uv pip install -e ".[dev]"
+
+# Verify installation
+python -c "import src; print(f'CloudForge v{src.__version__}')"
+```
+
+### Project Structure
+
+```
+cloudforge/
+├── src/
+│   ├── __init__.py          # Package metadata & entry point
+│   ├── server.py            # FastMCP server implementation
+│   ├── config.py            # Configuration management
+│   ├── models.py            # Pydantic data models
+│   ├── validator.py         # Diagram validation
+│   ├── generator.py         # Diagram generation engine
+│   └── storage.py           # Persistent storage layer
+├── tests/
+│   ├── test_validator.py    # Validator tests
+│   ├── test_storage.py      # Storage tests
+│   └── test_generator.py    # Generator tests
+├── examples/
+│   ├── serverless_app.py
+│   ├── microservices.py
+│   ├── multi_region.py
+│   ├── aws_hub_spoke.py
+│   └── multi_account_thanos.py
+├── images/
+│   ├── README.md
+│   └── multi-region-example.png
+├── .dockerignore             # Docker build optimization
+├── Dockerfile               # Container configuration
+├── pyproject.toml           # Project metadata
+├── uv.lock                  # Dependency lock file
+└── README.md                # This file
+```
+
+## 🧪 Testing
+
+### Run All Tests
+
+```bash
+# Execute all tests
+pytest -xvs tests/
+
+# Run with coverage
+pytest --cov=src --cov-report=html tests/
+
+# Run specific test file
+pytest -xvs tests/test_validator.py
+pytest -xvs tests/test_storage.py
+```
+
+### Test Coverage
+
+```bash
+# Generate HTML coverage report
+pytest --cov=src --cov-report=html tests/
+
+# View coverage
+open htmlcov/index.html
+```
+
+### Code Quality
+
+```bash
+# Format with Black
+black src/ tests/
+
+# Lint with Ruff
+ruff check src/ tests/
+
+# Type checking with mypy
+mypy src/
+```
+
+## 📋 Supported AWS Components
+
+### Compute
+- `Lambda` - AWS Lambda
+- `EC2` - Amazon EC2
+- `ECS` - Amazon ECS
+- `EKS` - Amazon EKS
+- `AutoScaling` - Auto Scaling
+
+### Networking
+- `APIGateway` - API Gateway
+- `Route53` - Route 53
+- `CloudFront` - CloudFront CDN
+- `VPC` - VPC
+- `SecurityGroup` - Security Groups
+- `ELB`, `ALB`, `NLB` - Load Balancers
+
+### Storage
+- `S3` - Amazon S3
+- `Dynamodb` - DynamoDB
+- `RDS` - RDS Database
+- `ElastiCache` - ElastiCache
+
+### Integration
+- `SQS` - SQS Queue
+- `SNS` - SNS Topic
+- `CodePipeline` - CodePipeline
+- `CodeBuild` - CodeBuild
+- `CodeDeploy` - CodeDeploy
+
+### Management
+- `CloudWatch` - CloudWatch
+- `IAM` - IAM
+- `KMS` - KMS
+
+## 🔧 Troubleshooting
+
+### "GraphViz not found"
+
+```bash
+# macOS
 brew install graphviz
 
 # Linux (Ubuntu/Debian)
@@ -441,102 +492,149 @@ sudo apt-get install graphviz
 
 # Linux (Fedora)
 sudo dnf install graphviz
+
+# Windows (Chocolatey)
+choco install graphviz
 ```
 
-### Error: "Module not found: diagrams"
+### "Module not found: diagrams"
 
 ```bash
 uv pip install diagrams
 ```
 
-### Validación falla con componentes válidos
+### Validation fails with valid components
 
-Verifica que uses los nombres exactos de los componentes y la ruta correcta:
+Verify you're using exact component names and correct import paths:
+
 ```python
-# Correcto ✓
+# ✓ Correct
 from diagrams.aws.compute import Lambda
 
-# Incorrecto ✗
+# ✗ Incorrect
 from diagrams.aws.compute import lambda
 ```
 
-## Desarrollo
-
-### Setup del Entorno
+### Docker build issues
 
 ```bash
-# Instalar dependencias de desarrollo
-uv pip install -e ".[dev]"
+# Clean rebuild
+docker build --no-cache -t cloudforge:latest .
 
-# Ejecutar tests
-pytest -xvs tests/
-
-# Verificar formato con black
-black src/ tests/
-
-# Linting con ruff
-ruff check src/ tests/
-
-# Type checking
-mypy src/
+# Check image size
+docker images cloudforge:latest
 ```
 
-## Estructura del Proyecto
+## 🤝 Contributing
 
-```
-mcp-aws/
-├── src/
-│   ├── __init__.py
-│   ├── config.py          # Configuración
-│   ├── models.py          # Modelos de datos
-│   ├── validator.py       # Validación de diagramas
-│   ├── generator.py       # Generación de diagramas
-│   ├── storage.py         # Almacenamiento persistente
-│   └── server.py          # Servidor MCP
-├── tests/
-│   ├── test_validator.py
-│   ├── test_storage.py
-│   └── test_generator.py
-├── Dockerfile
-├── pyproject.toml
-├── README.md
-└── LICENSE
-```
+Contributions are welcome! Please follow these steps:
 
-## Contribución
+1. **Fork** the repository
+2. **Create** a feature branch (`git checkout -b feature/AmazingFeature`)
+3. **Commit** your changes (`git commit -m 'Add AmazingFeature'`)
+4. **Push** to the branch (`git push origin feature/AmazingFeature`)
+5. **Open** a Pull Request
 
-Las contribuciones son bienvenidas. Por favor:
+### Contributing Guidelines
 
-1. Fork el proyecto
-2. Crea una rama para tu feature (`git checkout -b feature/AmazingFeature`)
-3. Commit tus cambios (`git commit -m 'Add some AmazingFeature'`)
-4. Push a la rama (`git push origin feature/AmazingFeature`)
-5. Abre un Pull Request
+- Follow PEP 8 style guide
+- Write tests for new features
+- Update documentation
+- Keep commits atomic and descriptive
 
-## Licencia
+## 📝 Changelog
 
-Este proyecto está bajo la licencia MIT. Ver `LICENSE` para más detalles.
+### v0.1.0 (2026-01-16)
 
-## Soporte
+**✨ Features:**
+- Initial release
+- AWS architecture diagram generation
+- Intelligent diagram validation with security analysis
+- Persistent storage with metadata management
+- Complete MCP API implementation
+- Multi-account architecture support
+- 5 ready-to-use examples
 
-Para reportar problemas o sugerencias, por favor abre un issue en el repositorio.
+**🔧 Technical:**
+- FastMCP server implementation
+- Pydantic data validation
+- Dockerfile with Python 3.12-slim
+- UV package manager integration
+- Comprehensive test coverage
+- SHA256 checksum verification
 
-## Changelog
+**📦 Components:**
+- Validator module with AST parsing
+- Generator module with subprocess execution
+- Storage module with JSON indexing
+- Server module with 5 MCP tools
 
-### v0.1.0 (2026-01-14)
-- ✨ Inicial release
-- ✨ Generación de diagramas AWS
-- ✨ Validación con análisis de seguridad
-- ✨ Almacenamiento persistente con metadatos
-- ✨ API MCP completa
-- ✨ Tests comprensivos
-- ✨ Dockerfile con Python 3.12
+## 🗺️ Roadmap
 
-## Roadmap
+### Phase 1: Core Features (Completed)
+- [x] Diagram generation from Python code
+- [x] Validation with security scanning
+- [x] Persistent storage with metadata
+- [x] MCP server implementation
+- [x] Docker support with UV
 
-- [ ] Soporte para más tipos de diagramas (Sequence, Flow)
-- [ ] Exportación a Terraform
-- [ ] Integración con AWS CLI
-- [ ] Web UI para visualización
-- [ ] Integración con Git para versionado
-- [ ] Colaboración en tiempo real
+### Phase 2: Enhancements (In Progress)
+- [ ] Support for additional diagram types (Sequence, Flow, Class)
+- [ ] Terraform code generation from diagrams
+- [ ] AWS CLI integration
+- [ ] Web UI for visualization
+- [ ] Real-time collaboration features
+
+### Phase 3: Advanced Features (Planned)
+- [ ] Git integration for version control
+- [ ] AI-powered architecture suggestions
+- [ ] Cost estimation from diagrams
+- [ ] Security posture analysis
+- [ ] Architecture compliance checking
+
+### Phase 4: Integration (Future)
+- [ ] CloudFormation template generation
+- [ ] Terraform module creation
+- [ ] Ansible playbook generation
+- [ ] Kubernetes manifest generation
+
+## 💬 Support
+
+### Getting Help
+
+- **Documentation**: See [CLOUDFORGE.md](CLOUDFORGE.md) for comprehensive documentation
+- **Issues**: Report bugs on [GitHub Issues](https://github.com/your-repo/issues)
+- **Discussions**: Start a discussion on [GitHub Discussions](https://github.com/your-repo/discussions)
+- **Email**: contact@cloudforge.dev
+
+### FAQ
+
+**Q: Can I use CloudForge for production diagrams?**
+A: Yes! CloudForge generates publication-ready diagrams with multiple output formats.
+
+**Q: What's the maximum diagram complexity?**
+A: Default limit is 100 components and 200 relationships (configurable).
+
+**Q: Does CloudForge support custom AWS components?**
+A: Currently supports 50+ official AWS components. Custom components coming soon.
+
+**Q: Can I export diagrams as IaC?**
+A: Terraform export is on the roadmap for Phase 2.
+
+## 📄 License
+
+This project is licensed under the MIT License - see [LICENSE](LICENSE) for details.
+
+## 🙏 Acknowledgments
+
+- Built with [Diagrams](https://diagrams.mingrammer.com/)
+- Powered by [Model Context Protocol](https://modelcontextprotocol.io)
+- Uses [FastMCP](https://github.com/modelcontextprotocol/python-sdk)
+- Package management by [UV](https://astral.sh/uv/)
+
+---
+
+**CloudForge** - Forge your cloud architecture with AI ⚡
+
+[![Stars](https://img.shields.io/github/stars/your-repo?style=social)](https://github.com/your-repo)
+[![Follow](https://img.shields.io/twitter/follow/cloudforge_dev?style=social)](https://twitter.com/cloudforge_dev)
