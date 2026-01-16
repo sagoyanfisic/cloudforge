@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  aws-diagram-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BUILDKIT_INLINE_CACHE: 1
+    container_name: aws-diagram-mcp-server
+    environment:
+      AWS_DIAGRAM_DIAGRAMS_STORAGE_PATH: /data/diagrams
+      AWS_DIAGRAM_MAX_DIAGRAM_SIZE_MB: 50
+      AWS_DIAGRAM_OUTPUT_FORMATS: png,pdf,svg
+      AWS_DIAGRAM_MAX_COMPONENTS: 100
+      AWS_DIAGRAM_MAX_RELATIONSHIPS: 200
+      AWS_DIAGRAM_LOG_LEVEL: INFO
+      PYTHONUNBUFFERED: 1
+    volumes:
+      - diagrams_data:/data/diagrams
+    restart: unless-stopped
+    networks:
+      - aws-diagram-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import src.server"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  diagrams_data:
+    driver: local
+
+networks:
+  aws-diagram-network:
+    driver: bridge
