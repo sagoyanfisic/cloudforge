@@ -462,17 +462,23 @@ class DiagramCoder:
 
     SYSTEM_PROMPT = """You are CloudForge-Core. Your goal is to generate executable Python code using the `diagrams` library based EXACTLY on the provided Blueprint.
 
-### VALID AWS SERVICE CLASSES (Use ONLY these)
+### VALID AWS SERVICE CLASSES (ONLY import and use these)
 **Compute:** EC2, Lambda, ECS, ElasticBeanstalk, AutoScaling, Batch
 **Database:** RDS, DynamoDB, ElastiCache, DAX, Redshift, DocumentDB, AppSync
-**Network:** APIGateway, ALB, NLB, ELB, Route53, CloudFront, VPC, NATGateway, VPCEndpoint, DirectConnect, VPN
+**Network:** APIGateway, ALB, NLB, ELB, Route53, CloudFront, NATGateway, VPCEndpoint, DirectConnect, VPN
 **Storage:** S3, EBS, EFS, Glacier, StorageGateway, FSx
-**Integration:** SQS, SNS, SES, SQS, Kinesis, KinesisFirehose, AppIntegrationService
-**Analytics:** Athena, EMR, Redshift, QuickSight, DataPipeline, Glue
+**Integration:** SQS, SNS, SES, Kinesis, KinesisFirehose
+**Analytics:** Athena, EMR, QuickSight, DataPipeline, Glue
 **Management:** CloudWatch, CloudTrail, SystemsManager, CloudFormation
 **Security:** IAM, KMS, SecretsManager, Shield, WAF, GuardDuty
 
-DO NOT use: SecurityGroup (not a visual class), Subnet, CloudFlare, custom classes, or AWS::* notation
+### LOGICAL CONCEPTS (Use in Cluster names ONLY, do NOT import)
+- **VPC:** Use as Cluster("VPC - Private Subnet") or Cluster("VPC - Public Subnet")
+- **Subnet:** Use as Cluster("Private Subnet") or Cluster("Public Subnet")
+- **SecurityGroup:** Use as Cluster("Security Group") but do NOT import
+- **RDSProxy:** Use concept name in Cluster, map to RDS node
+
+DO NOT IMPORT: VPC, Subnet, SecurityGroup, RDSProxy, CloudFlare, custom classes, AWS::* notation
 
 ### CRITICAL RULES
 1. **Output:** Return ONLY raw Python code. Do NOT use Markdown blocks (```).
@@ -594,16 +600,19 @@ Convert the User's Blueprint into Python code following the Reference Template a
         Raises:
             ValueError: If code has syntax errors or invalid imports
         """
-        # Check for invalid AWS service class names
-        invalid_classes = ["SecurityGroup", "Subnet", "VPC", "CloudFlare", "DBProxy"]
-        for invalid_class in invalid_classes:
-            if invalid_class in code:
-                logger.error(f"❌ Invalid class used: {invalid_class} (not a valid diagrams.aws class)")
-                logger.error(f"Code snippet:\n{code[:500]}")
+        # Check for invalid AWS service class names in imports (not in Cluster names)
+        import_section = code.split("os.makedirs")[0]  # Before diagram definition
+
+        invalid_import_classes = ["SecurityGroup", "Subnet", "VPC", "CloudFlare", "DBProxy"]
+        for invalid_class in invalid_import_classes:
+            # Check if it's being imported (in the import section)
+            if f"from diagrams" in import_section and invalid_class in import_section:
+                logger.error(f"❌ Invalid class in imports: {invalid_class} (not importable from diagrams.aws)")
+                logger.error(f"Import section:\n{import_section}")
                 raise ValueError(
-                    f"Generated code uses invalid class '{invalid_class}'. "
-                    f"Valid classes: EC2, Lambda, RDS, DynamoDB, S3, ALB, etc. "
-                    f"Abstract concepts like SecurityGroup or Subnet cannot be visual nodes."
+                    f"Generated code imports invalid class '{invalid_class}'. "
+                    f"VPC/Subnet/SecurityGroup are logical concepts for Clusters, not visual nodes. "
+                    f"Use: with Cluster('VPC - Private Subnet'): ... instead."
                 )
 
         try:
@@ -626,25 +635,30 @@ Convert the User's Blueprint into Python code following the Reference Template a
         """
         return """You are CloudForge-Serverless Coder. Generate Python diagrams code for Serverless architectures.
 
-VALID CLASSES FOR SERVERLESS:
+VALID CLASSES FOR SERVERLESS (ONLY import these):
 - **Compute:** Lambda
 - **API:** APIGateway
 - **Database:** RDS, DynamoDB
-- **Connection:** Use RDS for connection pooling concept (NOT RDSProxy - doesn't exist in diagrams)
-- **Network:** NATGateway, VPC (for Clusters only, not nodes)
+- **Network:** NATGateway, Route53
 - **Monitoring:** CloudWatch, CloudTrail
 - **Storage:** S3
 
+LOGICAL CONCEPTS (Use in Cluster names ONLY, do NOT import):
+- VPC: Use as Cluster("VPC - Private Subnet") or Cluster("VPC - Public Subnet")
+- Subnet: Use as Cluster("Private Subnet") or Cluster("Public Subnet")
+- SecurityGroup: Use as Cluster("Security Group - Lambda")
+
 SERVERLESS PATTERNS:
-1. API Gateway → Lambda → DynamoDB (direct)
-2. API Gateway → Lambda → RDS (represents database)
-3. Lambda → CloudWatch (logging)
-4. Include NAT Gateway for external calls
+1. APIGateway → Lambda → DynamoDB
+2. Lambda in Cluster("VPC - Private Subnet")
+3. RDS/DynamoDB in Cluster("VPC - Database Tier")
+4. Lambda → CloudWatch (logging)
 
-DO NOT USE: SecurityGroup, Subnet, RDSProxy, CloudFlare, abstract concepts
-ONLY: Visual AWS services from the list above
+DO NOT IMPORT: SecurityGroup, Subnet, VPC, RDSProxy, CloudFlare
+DO NOT CREATE NODES: SecurityGroup, Subnet, VPC (these are Clusters only)
+ONLY IMPORT: Lambda, APIGateway, RDS, DynamoDB, CloudWatch, CloudTrail, S3, NATGateway
 
-TEMPLATE FOR SERVERLESS:
+TEMPLATE FOR SERVERLESS (CORRECT):
 import os
 from diagrams import Diagram, Cluster
 from diagrams.aws.network import APIGateway, NATGateway
@@ -654,18 +668,26 @@ from diagrams.aws.management import CloudWatch, CloudTrail
 
 os.makedirs("output", exist_ok=True)
 
-with Diagram("Serverless Architecture", show=False, filename="output/serverless", direction="TB"):
+with Diagram("Serverless API", show=False, filename="output/serverless", direction="TB"):
+    # Public layer
     api = APIGateway("REST API")
 
-    with Cluster("Compute"):
-        func = Lambda("Lambda Functions")
+    # Private subnets (use Cluster, NOT from import)
+    with Cluster("VPC - Private Subnet"):
+        with Cluster("Compute"):
+            func = Lambda("Lambda Functions")
 
-    db_nosql = DynamoDB("NoSQL Data")
-    db_sql = RDS("SQL Database")
-    monitor = CloudWatch("Monitoring")
+        with Cluster("Database Tier"):
+            db_sql = RDS("PostgreSQL")
+            db_nosql = DynamoDB("NoSQL Cache")
 
-    api >> func >> db_nosql
+    # Monitoring
+    monitor = CloudWatch("CloudWatch")
+
+    # Flows
+    api >> func
     func >> db_sql
+    func >> db_nosql
     func >> monitor
 
 RULES:
