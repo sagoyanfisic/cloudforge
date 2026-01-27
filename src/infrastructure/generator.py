@@ -102,9 +102,3 @@ class DiagramGenerator:
 
         logger.debug(f"Modified code filename parameter to: {self.temp_dir / diagram_name}")
         return modified_code
-
-    def cleanup(self, diagram_name: str) -> None:
-        """Clean up temporary files"""
-        script_file = self.temp_dir / f"{diagram_name}_script.py"
-        if script_file.exists():
-            script_file.unlink()

@@ -212,10 +212,6 @@ class DiagramGenerationService:
         """Obtener diagrama almacenado"""
         return self.repository.get(diagram_id)
 
-    def list_recent_diagrams(self, limit: int = 10) -> list[StoredDiagram]:
-        """Listar diagramas recientes"""
-        return self.repository.list_recent(limit)
-
     def delete_diagram(self, diagram_id: str) -> bool:
         """Eliminar diagrama"""
         return self.repository.delete(diagram_id)

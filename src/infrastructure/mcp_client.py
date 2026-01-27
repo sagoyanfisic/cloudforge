@@ -46,55 +46,6 @@ class MCPDirectClient:
             self._connected = False
             return False
 
-    def call_tool(self, tool_name: str, arguments: dict[str, Any]) -> dict[str, Any]:
-        """Call a tool on the MCP server
-
-        Args:
-            tool_name: Name of the tool to call
-            arguments: Tool arguments
-
-        Returns:
-            Tool result as dictionary
-        """
-        if not self._connected:
-            return {
-                "success": False,
-                "message": "MCP client not connected. Call connect() first.",
-            }
-
-        try:
-            logger.debug(f"📤 Calling tool: {tool_name} with args: {arguments}")
-
-            # Call the appropriate tool function
-            if tool_name == "generate_diagram":
-                result = self.generate_diagram(**arguments)
-            elif tool_name == "validate_diagram":
-                result = self.validate_diagram(**arguments)
-            elif tool_name == "list_diagrams":
-                result = self.list_diagrams(**arguments)
-            elif tool_name == "get_diagram":
-                result = self.get_diagram(**arguments)
-            elif tool_name == "delete_diagram":
-                result = self.delete_diagram(**arguments)
-            elif tool_name == "generate_from_description":
-                result = self.generate_from_description(**arguments)
-            else:
-                return {
-                    "success": False,
-                    "message": f"Unknown tool: {tool_name}",
-                }
-
-            logger.debug(f"📥 Tool result: {result}")
-            logger.info(f"✅ Tool '{tool_name}' executed successfully")
-            return result
-
-        except Exception as e:
-            logger.error(f"❌ Tool call failed: {str(e)}")
-            return {
-                "success": False,
-                "message": f"Tool call failed: {str(e)}",
-            }
-
     def close(self) -> None:
         """Close MCP connection"""
         self._connected = False
