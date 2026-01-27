@@ -284,12 +284,60 @@ KEY POINTS:
             if "import" not in code or "Diagram" not in code:
                 raise ValueError("Generated code missing required imports")
 
+            # Validate for common issues
+            self._validate_generated_code(code)
+
             logger.info("✅ Code generated successfully")
             return code
 
         except Exception as e:
             logger.error(f"❌ Code generation failed: {str(e)}")
             raise ValueError(f"Code generation failed: {str(e)}")
+
+    def _validate_generated_code(self, code: str) -> None:
+        """Validate generated code for common issues.
+
+        Args:
+            code: Generated Python code
+
+        Raises:
+            ValueError: If validation fails
+        """
+        import re
+
+        # Check for Cluster >> Cluster pattern (common error)
+        # Look for patterns like: variable_name >> variable_name where both are Clusters
+        lines = code.split("\n")
+        cluster_vars = set()
+        node_vars = set()
+
+        for line in lines:
+            # Find Cluster definitions
+            cluster_match = re.search(r'with\s+Cluster\(["\']([^"\']+)["\']\):', line)
+            if cluster_match:
+                # Extract variable name from previous line
+                idx = lines.index(line)
+                if idx > 0 and "=" in lines[idx - 1]:
+                    var_match = re.search(r'(\w+)\s*=\s*Cluster', lines[idx - 1])
+                    if var_match:
+                        cluster_vars.add(var_match.group(1))
+
+            # Find node definitions (Service classes)
+            node_match = re.search(r'(\w+)\s*=\s*(Lambda|EC2|ECS|RDS|S3|APIGateway|ALB|NLB|SQS|SNS|Kinesis|ElastiCache|NATGateway|Batch|Route53|EBS|EFS|Redshift)\(', line)
+            if node_match:
+                node_vars.add(node_match.group(1))
+
+        # Check for >> connections
+        connection_pattern = re.compile(r'(\w+)\s*>>\s*(\w+)')
+        for line in lines:
+            matches = connection_pattern.findall(line)
+            for source, dest in matches:
+                # Warn if connecting Clusters (both are in cluster_vars)
+                if source in cluster_vars and dest in cluster_vars:
+                    logger.warning(
+                        f"⚠️ Potential issue: Connecting Clusters directly "
+                        f"({source} >> {dest}). Should connect nodes, not Clusters."
+                    )
 
     def _format_blueprint(self, blueprint: dict[str, Any]) -> str:
         """Format blueprint as text for prompt"""
