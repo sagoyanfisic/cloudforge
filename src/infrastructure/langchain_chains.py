@@ -105,18 +105,18 @@ class BlueprintArchitectChain:
         system_prompt = """You are CloudForge Blueprint Architect. Analyze AWS architecture descriptions.
 
 OUTPUT FORMAT (JSON):
-{
+{{
   "title": "Architecture Name",
   "description": "Brief description",
   "nodes": [
-    {"name": "API Gateway", "variable": "api_gw", "service_type": "APIGateway", "region": "us-east-1"},
-    {"name": "Lambda", "variable": "lambda_func", "service_type": "Lambda", "region": "us-east-1"}
+    {{"name": "API Gateway", "variable": "api_gw", "service_type": "APIGateway", "region": "us-east-1"}},
+    {{"name": "Lambda", "variable": "lambda_func", "service_type": "Lambda", "region": "us-east-1"}}
   ],
   "relationships": [
-    {"source": "api_gw", "destination": "lambda_func", "connection_type": "default"}
+    {{"source": "api_gw", "destination": "lambda_func", "connection_type": "default"}}
   ],
-  "metadata": {"pattern": "serverless", "services_count": 2}
-}
+  "metadata": {{"pattern": "serverless", "services_count": 2}}
+}}
 
 RULES:
 1. Extract ALL AWS services mentioned
