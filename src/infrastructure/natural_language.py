@@ -136,7 +136,7 @@ COMMON PATTERNS:
             raise ValueError("GOOGLE_API_KEY environment variable not set")
 
         genai.configure(api_key=key)
-        self.model = genai.GenerativeModel("gemini-1.5-flash")
+        self.model = genai.GenerativeModel("gemini-2.0-flash")
 
     def analyze(self, raw_text: str) -> ArchitectureBlueprint:
         """Analyze raw text and generate blueprint.
@@ -500,8 +500,8 @@ RULE: If you need logical grouping, use with Cluster("GroupName"): not imports
             raise ValueError("GOOGLE_API_KEY environment variable not set")
 
         genai.configure(api_key=key)
-        # Use gemini-1.5-flash for balance of speed and quality
-        self.model = genai.GenerativeModel("gemini-1.5-flash")
+        # Use gemini-2.0-flash for better stability and code generation
+        self.model = genai.GenerativeModel("gemini-2.0-flash")
 
     def generate_code(self, blueprint: ArchitectureBlueprint) -> str:
         """Generate Python code from blueprint.
