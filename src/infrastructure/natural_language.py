@@ -16,6 +16,14 @@ from typing import Optional
 import google.generativeai as genai
 from pydantic import BaseModel, Field
 
+# AWS MCP Clients (optional for best practices enrichment)
+try:
+    from .aws_mcp_client import get_aws_documentation_client
+    HAS_AWS_MCP = True
+except ImportError:
+    HAS_AWS_MCP = False
+    get_aws_documentation_client = None
+
 logger = logging.getLogger(__name__)
 
 
@@ -156,9 +164,18 @@ COMMON PATTERNS:
         is_serverless = self._detect_serverless(raw_text)
         system_prompt = self._get_serverless_prompt() if is_serverless else self.SYSTEM_PROMPT
 
+        # Optionally enrich with AWS best practices from documentation server
+        aws_best_practices = self._enrich_with_aws_best_practices(raw_text)
+
         try:
+            # Prepare messages: system prompt, best practices (if available), and user input
+            messages = [system_prompt]
+            if aws_best_practices:
+                messages.append(f"Additional AWS Best Practices Context:{aws_best_practices}")
+            messages.append(f"\nUser input:\n{raw_text}")
+
             response = self.model.generate_content(
-                [system_prompt, f"\nUser input:\n{raw_text}"],
+                messages,
                 generation_config=genai.types.GenerationConfig(
                     temperature=0.05,  # Very low for analytical precision
                     max_output_tokens=5000,  # Increased to avoid truncation
@@ -374,6 +391,55 @@ COMMON PATTERNS:
         ]
         text_lower = text.lower()
         return sum(1 for keyword in serverless_keywords if keyword in text_lower) >= 3
+
+    def _enrich_with_aws_best_practices(self, text: str) -> str:
+        """Enrich analysis with AWS best practices from AWS Documentation MCP
+
+        Optionally calls AWS Documentation server to get real-time best practices.
+
+        Args:
+            text: Architecture description
+
+        Returns:
+            str: Best practices recommendations (or empty string if unavailable)
+        """
+        if not HAS_AWS_MCP or get_aws_documentation_client is None:
+            return ""
+
+        try:
+            logger.info("🔍 Enriching with AWS best practices from documentation server...")
+            doc_client = get_aws_documentation_client()
+
+            if not doc_client.is_connected():
+                if not doc_client.connect():
+                    logger.warning("⚠️ Could not connect to AWS Documentation server")
+                    return ""
+
+            # Extract key services from description
+            services = []
+            common_services = ["lambda", "dynamodb", "rds", "api gateway", "s3", "sqs", "sns", "kinesis", "cloudwatch"]
+            for service in common_services:
+                if service in text.lower():
+                    services.append(service)
+
+            if not services:
+                return ""
+
+            # Get best practices for detected services
+            enrichment = "\n\n--- AWS Best Practices ---\n"
+
+            for service in services[:3]:  # Limit to 3 services to avoid overload
+                pattern = "serverless" if "lambda" in text.lower() else "general"
+                practices = doc_client.get_best_practices(service, pattern)
+                if practices:
+                    enrichment += f"\n{service.upper()}:\n{practices}\n"
+
+            logger.info(f"✅ Enriched with best practices for: {', '.join(services)}")
+            return enrichment
+
+        except Exception as e:
+            logger.warning(f"⚠️ Could not enrich with AWS best practices: {str(e)}")
+            return ""
 
     def _get_serverless_prompt(self) -> str:
         """Get specialized prompt for serverless architectures.
