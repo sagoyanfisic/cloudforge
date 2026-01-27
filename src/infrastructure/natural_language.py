@@ -468,11 +468,24 @@ CRITICAL RULES:
 3. NO markdown blocks, NO explanations, ONLY code
 4. Keep code SHORT and COMPLETE (no truncation)
 
+VALID IMPORTS FROM diagrams.aws.*:
+- compute: Lambda, EC2, ECS, Batch
+- database: RDS, ElastiCache, Redshift
+- network: APIGateway, ALB, NLB, NATGateway
+- storage: S3, EBS
+- integration: SQS, SNS, Kinesis
+- management: CloudWatch, CloudTrail
+
+ABSTRACT CONCEPTS (use in Cluster names ONLY):
+- DynamoDB: use Cluster("DynamoDB") not import
+- VPC, Subnet: use Cluster("VPC - Private") not import
+- SecurityGroup, RDSProxy: use Cluster names only
+
 MINIMAL TEMPLATE (modify ONLY variable names):
 import os
 from diagrams import Diagram, Cluster
 from diagrams.aws.compute import Lambda
-from diagrams.aws.database import RDS, DynamoDB
+from diagrams.aws.database import RDS
 from diagrams.aws.network import APIGateway
 
 os.makedirs("output", exist_ok=True)
@@ -480,13 +493,11 @@ os.makedirs("output", exist_ok=True)
 with Diagram("Title", show=False, filename="output/diagram", direction="TB"):
     api = APIGateway("API")
     func = Lambda("Func")
-    db = RDS("DB")
+    with Cluster("Database"):
+        db = RDS("PostgreSQL")
     api >> func >> db
 
-VALID IMPORTS ONLY: Lambda, RDS, DynamoDB, APIGateway, S3, SQS, SNS, Kinesis, CloudWatch, ElastiCache
-NEVER USE: VPC, Subnet, SecurityGroup, RDSProxy (these go in Cluster names only)
-
-RULE: If you need logical grouping, use with Cluster("GroupName"): not imports
+RULE: Logical groupings (DB tier, VPC, DynamoDB table) go in Clusters, not as imports
 """
 
     def __init__(self, api_key: Optional[str] = None):
@@ -647,16 +658,26 @@ RULE: If you need logical grouping, use with Cluster("GroupName"): not imports
         # Check for invalid AWS service class names in imports (not in Cluster names)
         import_section = code.split("os.makedirs")[0]  # Before diagram definition
 
-        invalid_import_classes = ["SecurityGroup", "Subnet", "VPC", "CloudFlare", "DBProxy"]
+        invalid_import_classes = [
+            "SecurityGroup", "Subnet", "VPC", "CloudFlare", "DBProxy", "RDSProxy",
+            "DynamoDB"  # DynamoDB tables are represented as Clusters, not imported
+        ]
         for invalid_class in invalid_import_classes:
             # Check if it's being imported (in the import section)
             if f"from diagrams" in import_section and invalid_class in import_section:
                 logger.error(f"❌ Invalid class in imports: {invalid_class} (not importable from diagrams.aws)")
                 logger.error(f"Import section:\n{import_section}")
+
+                # Provide specific guidance for each invalid class
+                if invalid_class == "DynamoDB":
+                    hint = "DynamoDB tables are logical concepts. Use: with Cluster('DynamoDB'): ... instead."
+                elif invalid_class in ["VPC", "Subnet", "SecurityGroup"]:
+                    hint = f"{invalid_class} are logical concepts for Clusters, not visual nodes. Use: with Cluster('{invalid_class}'): ... instead."
+                else:
+                    hint = f"{invalid_class} is not a valid diagrams.aws class."
+
                 raise ValueError(
-                    f"Generated code imports invalid class '{invalid_class}'. "
-                    f"VPC/Subnet/SecurityGroup are logical concepts for Clusters, not visual nodes. "
-                    f"Use: with Cluster('VPC - Private Subnet'): ... instead."
+                    f"Generated code imports invalid class '{invalid_class}'. {hint}"
                 )
 
         try:
@@ -682,32 +703,33 @@ RULE: If you need logical grouping, use with Cluster("GroupName"): not imports
 VALID CLASSES FOR SERVERLESS (ONLY import these):
 - **Compute:** Lambda
 - **API:** APIGateway
-- **Database:** RDS, DynamoDB
+- **Database:** RDS
 - **Network:** NATGateway, Route53
 - **Monitoring:** CloudWatch, CloudTrail
 - **Storage:** S3
 
 LOGICAL CONCEPTS (Use in Cluster names ONLY, do NOT import):
+- DynamoDB: Use as Cluster("DynamoDB Tables")
 - VPC: Use as Cluster("VPC - Private Subnet") or Cluster("VPC - Public Subnet")
 - Subnet: Use as Cluster("Private Subnet") or Cluster("Public Subnet")
 - SecurityGroup: Use as Cluster("Security Group - Lambda")
+- RDSProxy: Use as Cluster("RDS Proxy") NOT import
 
 SERVERLESS PATTERNS:
-1. APIGateway → Lambda → DynamoDB
+1. APIGateway → Lambda → RDS or DynamoDB (in Clusters)
 2. Lambda in Cluster("VPC - Private Subnet")
 3. RDS/DynamoDB in Cluster("VPC - Database Tier")
 4. Lambda → CloudWatch (logging)
 
-DO NOT IMPORT: SecurityGroup, Subnet, VPC, RDSProxy, CloudFlare
-DO NOT CREATE NODES: SecurityGroup, Subnet, VPC (these are Clusters only)
-ONLY IMPORT: Lambda, APIGateway, RDS, DynamoDB, CloudWatch, CloudTrail, S3, NATGateway
+DO NOT IMPORT: SecurityGroup, Subnet, VPC, RDSProxy, DynamoDB, CloudFlare
+ONLY IMPORT FROM diagrams.aws: Lambda, APIGateway, RDS, CloudWatch, CloudTrail, S3, NATGateway
 
 TEMPLATE FOR SERVERLESS (CORRECT):
 import os
 from diagrams import Diagram, Cluster
 from diagrams.aws.network import APIGateway, NATGateway
 from diagrams.aws.compute import Lambda
-from diagrams.aws.database import RDS, DynamoDB
+from diagrams.aws.database import RDS
 from diagrams.aws.management import CloudWatch, CloudTrail
 
 os.makedirs("output", exist_ok=True)
@@ -723,7 +745,8 @@ with Diagram("Serverless API", show=False, filename="output/serverless", directi
 
         with Cluster("Database Tier"):
             db_sql = RDS("PostgreSQL")
-            db_nosql = DynamoDB("NoSQL Cache")
+            with Cluster("DynamoDB Tables"):
+                db_nosql = None  # Represented as Cluster only
 
     # Monitoring
     monitor = CloudWatch("CloudWatch")
@@ -731,16 +754,15 @@ with Diagram("Serverless API", show=False, filename="output/serverless", directi
     # Flows
     api >> func
     func >> db_sql
-    func >> db_nosql
     func >> monitor
 
 RULES:
 1. Return ONLY Python code (no markdown blocks)
-2. Import correct classes from diagrams.aws.*
-3. Map Blueprint nodes to visual classes
-4. Use Clusters for logical groupings (VPC, Subnets, etc.)
-5. RDS/DynamoDB are separate nodes (connection pooling is implicit)
-6. Never output abstract concepts as nodes
+2. Import correct classes from diagrams.aws.* ONLY
+3. Map Blueprint nodes to visual classes (RDS as node, DynamoDB as Cluster)
+4. Use Clusters for logical groupings (VPC, Subnets, DynamoDB, RDSProxy)
+5. Abstract concepts (DynamoDB, VPC, SecurityGroup) are Clusters, NOT imports
+6. Never try to import: DynamoDB, SecurityGroup, Subnet, VPC, RDSProxy
 """
 
 
