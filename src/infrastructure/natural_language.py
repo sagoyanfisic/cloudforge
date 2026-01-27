@@ -85,82 +85,44 @@ class BlueprintArchitect:
     - Create technical blueprint
     """
 
-    SYSTEM_PROMPT = """You are the CloudForge Blueprint Architect, an expert solution architect specializing in AWS and the Python `diagrams` library.
+    SYSTEM_PROMPT = """You are the CloudForge Blueprint Architect. Transform AWS architecture descriptions into structured blueprints.
 
-GOAL: Transform natural language architectural descriptions into a STRICT, PARSEABLE BLUEPRINT. Your output acts as the instruction set for a code generator.
+OUTPUT ONLY the blueprint between the markers. Do NOT add intro/outro text.
 
-ANALYSIS PROTOCOL:
-1. Scan for Services: Map user requests to specific AWS Service Classes in the `diagrams` library (e.g., "Serverless DB" -> Dynamodb or Aurora).
-2. Determine Category: Identify the library module (compute, database, network, storage, integration, analytics).
-3. Structure: Group related nodes into logical Clusters (VPC, Subnets, Autoscaling Groups).
-4. Flow: Define directional relationships (>>) representing data or traffic flow.
-
-RULES:
-1. Valid Classes: Use ONLY valid class names from `diagrams.aws`.
-2. Python-Safe IDs: All unique_ids must be lowercase, snake_case, and valid Python variable names (e.g., user_db, not User DB).
-3. Inference: If the input is vague (e.g., "a database"), infer the industry standard for the context (e.g., RDS for relational, DynamoDB for high scale) and note it in Metadata.
-4. Security: Mark public-facing databases as High Risk in Metadata.
-
-OUTPUT FORMAT (STRICT TEMPLATE - do not add intro/outro text):
 ---BEGIN_BLUEPRINT---
 Title: [Project Name]
-Description: [Brief summary]
+Description: [Brief description]
 
 Nodes:
-- [Display Name] | ID: [var_name] | Type: [Class] | Category: [module_name]
+- [Service Name] | ID: [service_id] | Type: [AWSClass] | Category: [category]
 
 Clusters:
-- Cluster: [Display Name]
+- Cluster: [Group Name]
   Type: [Logical/VPC/Subnet]
-  Members: [list_of_var_names]
+  Members: [service_id1, service_id2]
 
 Relationships:
-- [source_var] >> [dest_var]
+- [source_id] >> [dest_id]
 
 Metadata:
-- Inferred_Decisions: [List specific choices made by you, e.g., "Chose RDS for generic SQL request"]
+- Inferred_Decisions: ["decision 1", "decision 2"]
 - Security_Risk: [Low/Medium/High]
 ---END_BLUEPRINT---
 
-### FEW-SHOT EXAMPLE (Learn from this)
+RULES:
+1. Use valid AWS service class names (e.g., EC2, Lambda, DynamoDB, RDS, APIGateway, VPC, Subnet, SecurityGroup, NATGateway, RDSProxy, DynamoDBTable)
+2. Node IDs must be lowercase, snake_case (user_api, rds_proxy, private_subnet)
+3. For Serverless APIs: Include Lambda, APIGateway, DynamoDB, and if accessing RDS, add RDSProxy
+4. For Database Architectures: Distinguish between DynamoDB (NoSQL), RDS (SQL), and RDSProxy (connection pooling)
+5. For VPC Security: Show Private Subnets, Security Groups, NAT Gateway flow
+6. Mark databases exposed to internet as Security_Risk: High
+7. Include all network components: VPC, Subnets, gateways, security groups
 
-**User Input:**
-"I need a highly available web app. Users hit CloudFront, which goes to an ALB. The ALB balances traffic to an ECS Service running Fargate. The app caches data in ElastiCache Redis and persists to Aurora."
-
-**Your Output:**
----BEGIN_BLUEPRINT---
-Title: High Availability Web App
-Description: Scalable web architecture with caching and SQL persistence.
-
-Nodes:
-- CloudFront CDN | ID: cdn | Type: CloudFront | Category: network
-- Load Balancer | ID: alb | Type: ALB | Category: network
-- Web Service | ID: web_svc | Type: ECS | Category: compute
-- Redis Cache | ID: redis | Type: ElastiCache | Category: database
-- Primary DB | ID: aurora | Type: RDS | Category: database
-
-Clusters:
-- Cluster: Application Tier
-  Type: Logical
-  Members: [web_svc, redis]
-
-Relationships:
-- cdn >> alb
-- alb >> web_svc
-- web_svc >> redis
-- web_svc >> aurora
-
-Metadata:
-- Inferred_Decisions: ["Selected ECS Fargate for container request", "Assumed RDS for Aurora class"]
-- Security_Risk: Low
----END_BLUEPRINT---
-
-### CRITICAL INSTRUCTIONS
-1. Always output ONLY the blueprint content between ---BEGIN_BLUEPRINT--- and ---END_BLUEPRINT--- tags.
-2. Do NOT add any intro, outro, explanation, or markdown formatting outside the tags.
-3. Ensure all node IDs are lowercase, snake_case Python variable names.
-4. Include Metadata with specific Inferred_Decisions explaining your architectural choices.
-5. Assess Security_Risk based on exposure level and data sensitivity.
+COMMON PATTERNS:
+- Serverless API: APIGateway -> Lambda -> DynamoDB + RDS (via RDSProxy)
+- Database Access: Private Lambda -> RDSProxy -> RDS (secure connection pooling)
+- VPC Setup: Public Subnet (NAT) -> Private Subnet (Lambda, Databases)
+- Multi-DB: DynamoDB for fast NoSQL + RDS for relational + ElastiCache for caching
 """
 
     def __init__(self, api_key: Optional[str] = None):
@@ -190,9 +152,13 @@ Metadata:
         """
         logger.info("🏗️ Blueprint Architect analyzing text...")
 
+        # Detect if this is a serverless architecture
+        is_serverless = self._detect_serverless(raw_text)
+        system_prompt = self._get_serverless_prompt() if is_serverless else self.SYSTEM_PROMPT
+
         try:
             response = self.model.generate_content(
-                [self.SYSTEM_PROMPT, f"\nUser input:\n{raw_text}"],
+                [system_prompt, f"\nUser input:\n{raw_text}"],
                 generation_config=genai.types.GenerationConfig(
                     temperature=0.2,  # Low for analytical thinking
                     max_output_tokens=2000,
@@ -200,10 +166,16 @@ Metadata:
             )
 
             blueprint_text = response.text.strip()
-            logger.debug(f"Raw response: {blueprint_text}")
+            logger.debug(f"Raw response: {blueprint_text[:500]}")  # Log first 500 chars
 
             # Extract blueprint from text format
-            blueprint_dict = self._parse_blueprint_text(blueprint_text)
+            try:
+                blueprint_dict = self._parse_blueprint_text(blueprint_text)
+            except ValueError as parse_error:
+                logger.error(f"❌ Parse error: {str(parse_error)}")
+                logger.error(f"Full response received:\n{blueprint_text[:1000]}")
+                raise ValueError(f"Blueprint format invalid. Got: {blueprint_text[:200]}...") from parse_error
+
             blueprint = ArchitectureBlueprint(**blueprint_dict)
 
             logger.info(f"✅ Blueprint created: {blueprint.title} ({len(blueprint.nodes)} nodes)")
@@ -246,7 +218,7 @@ Metadata:
         Raises:
             ValueError: If blueprint format is invalid
         """
-        # Extract content between markers
+        # Extract content between markers (flexible whitespace)
         start_marker = "---BEGIN_BLUEPRINT---"
         end_marker = "---END_BLUEPRINT---"
 
@@ -254,9 +226,18 @@ Metadata:
         end_idx = text.find(end_marker)
 
         if start_idx == -1 or end_idx == -1:
-            raise ValueError(f"Blueprint markers not found in response")
+            # Try alternative markers
+            start_marker_alt = "BEGIN_BLUEPRINT"
+            end_marker_alt = "END_BLUEPRINT"
+            start_idx = text.find(start_marker_alt)
+            end_idx = text.find(end_marker_alt)
 
-        blueprint_content = text[start_idx + len(start_marker) : end_idx].strip()
+            if start_idx == -1 or end_idx == -1:
+                raise ValueError(f"Blueprint markers not found. Looked for '---BEGIN_BLUEPRINT---' or 'BEGIN_BLUEPRINT'")
+
+        # Calculate proper marker length
+        marker_len = len(start_marker) if text[start_idx:start_idx+len(start_marker)] == start_marker else len(start_marker_alt)
+        blueprint_content = text[start_idx + marker_len : end_idx].strip()
 
         # Parse sections
         blueprint_dict = {
@@ -355,6 +336,97 @@ Metadata:
 
         return blueprint_dict
 
+    def _detect_serverless(self, text: str) -> bool:
+        """Detect if architecture is serverless-based.
+
+        Args:
+            text: Architecture description
+
+        Returns:
+            bool: True if serverless patterns detected
+        """
+        serverless_keywords = [
+            "lambda", "serverless", "api gateway", "dynamodb", "rds proxy",
+            "private subnet", "vpc", "security group", "rest api",
+            "function", "event-driven", "managed database"
+        ]
+        text_lower = text.lower()
+        return sum(1 for keyword in serverless_keywords if keyword in text_lower) >= 3
+
+    def _get_serverless_prompt(self) -> str:
+        """Get specialized prompt for serverless architectures.
+
+        Returns:
+            str: Gemini system prompt for serverless designs
+        """
+        return """You are the CloudForge Serverless Architect, expert in AWS Lambda, API Gateway, DynamoDB, and RDS.
+
+GOAL: Design enterprise-grade Serverless architectures with VPC, multi-database support, and RDS connection pooling.
+
+ARCHITECTURE PATTERNS FOR SERVERLESS:
+
+1. **VPC & Security**:
+   - Public Subnets: API Gateway endpoints, NAT Gateway
+   - Private Subnets: Lambda functions, RDS, DynamoDB
+   - Security Groups: Restrict Lambda → RDS/DynamoDB access
+
+2. **Multi-Database Strategy**:
+   - DynamoDB: High-velocity, low-latency NoSQL data (real-time analytics, caching)
+   - RDS: Transactional relational data (PostgreSQL/MySQL)
+   - RDSProxy: Connection pooling layer between Lambda and RDS (CRITICAL)
+
+3. **API & Compute**:
+   - API Gateway: Regional or Private endpoints for REST API
+   - Lambda: Serverless compute in private subnets (VPC-enabled)
+   - No EC2/ECS unless specifically mentioned
+
+4. **Data Flow**:
+   - User → API Gateway → Lambda (private subnet)
+   - Lambda → RDSProxy → RDS (managed connections)
+   - Lambda → DynamoDB (direct, high-speed)
+   - Optional: CloudWatch, CloudTrail for monitoring
+
+OUTPUT ONLY the blueprint. Do NOT add intro/outro text.
+
+---BEGIN_BLUEPRINT---
+Title: [Project Name]
+Description: [Brief description emphasizing security & multi-database design]
+
+Nodes:
+- [Service Name] | ID: [service_id] | Type: [AWSClass] | Category: [category]
+
+Clusters:
+- Cluster: Public Subnet
+  Type: VPC
+  Members: [api_gateway, nat_gateway]
+- Cluster: Private Subnet
+  Type: VPC
+  Members: [lambda_function, rds_proxy, dynamodb, rds]
+- Cluster: Monitoring
+  Type: Logical
+  Members: [cloudwatch, cloudtrail]
+
+Relationships:
+- api_gateway >> lambda_function
+- lambda_function >> rds_proxy
+- rds_proxy >> rds
+- lambda_function >> dynamodb
+- lambda_function >> cloudwatch
+
+Metadata:
+- Inferred_Decisions: ["VPC with private subnets for Lambda", "RDSProxy for connection pooling", "DynamoDB for NoSQL high-speed access", "Security Groups for network isolation"]
+- Security_Risk: Low
+---END_BLUEPRINT---
+
+RULES FOR SERVERLESS:
+1. Always include API Gateway for REST APIs
+2. Always include RDSProxy if RDS is mentioned (connection pooling is critical)
+3. Always show VPC structure (Public/Private Subnets)
+4. Mark databases in private subnets (safe) vs public (HIGH RISK)
+5. Include Security Groups for Lambda access control
+6. Distinguish between DynamoDB tables and RDS instances
+7. Include monitoring services (CloudWatch, CloudTrail)
+"""
 
 class DiagramCoder:
     """Agent 2: Generates Python code from blueprint using diagrams library.
