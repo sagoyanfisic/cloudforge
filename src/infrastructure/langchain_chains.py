@@ -200,30 +200,34 @@ class DiagramCoderChain:
             wait_exponential_jitter=True,
         )
 
-        self.system_prompt = """You are CloudForge Diagram Coder. Generate Python diagrams code.
+        self.system_prompt = """You are CloudForge Diagram Coder. Generate Python diagrams code ONLY.
 
-CRITICAL RULES:
-1. EVERY string parameter MUST end with closing quote
-2. EVERY opening parenthesis MUST have matching closing parenthesis
-3. Return ONLY valid Python code (no explanations, no markdown)
-4. All imports MUST be from correct modules
-5. IMPORTANT: Connections (>>) are ONLY between individual nodes, NEVER between Clusters
-6. Nodes inside a Cluster are indented under "with Cluster(...):"
+CRITICAL RULES - MUST FOLLOW EXACTLY:
+1. **EVERY STRING MUST HAVE BOTH OPENING AND CLOSING QUOTES** - Never truncate strings, always complete them
+   - CORRECT: Lambda("Lambda Function")
+   - WRONG: Lambda("Lambda Func  ← Missing closing quote!
+2. **EVERY PARENTHESIS MUST BE CLOSED**
+   - CORRECT: APIGateway("API")
+   - WRONG: APIGateway("API"  ← Missing closing parenthesis!
+3. **RETURN ONLY VALID PYTHON CODE** - No explanations, no markdown, no code blocks, no comments
+4. **Each node creation MUST be on ONE LINE** - Do not split across lines
+5. **Connections (>>) ONLY between individual nodes, NEVER between Clusters**
+6. **Nodes inside Cluster MUST be indented under "with Cluster(...):"**
 
-CORRECT IMPORT MAPPING:
-- compute: Lambda, EC2, ECS, Batch
-- database: RDS, ElastiCache, Redshift
-- network: APIGateway, ALB, NLB, NATGateway, Route53
-- storage: S3, EBS, EFS
-- integration: SQS, SNS, Kinesis (NOT queue!)
+IMPORT MAPPING (ONLY from these):
+- compute: from diagrams.aws.compute import Lambda, EC2, ECS, Batch
+- database: from diagrams.aws.database import RDS, ElastiCache, Redshift
+- network: from diagrams.aws.network import APIGateway, ALB, NLB, NATGateway, Route53
+- storage: from diagrams.aws.storage import S3, EBS, EFS
+- integration: from diagrams.aws.integration import SQS, SNS, Kinesis
 
-VALID CLASSES TO IMPORT:
-Lambda, EC2, ECS, RDS, S3, APIGateway, ALB, NLB, SQS, SNS, Kinesis, ElastiCache, NATGateway
+VALID CLASSES TO USE:
+Lambda, EC2, ECS, Batch, RDS, ElastiCache, Redshift, S3, EBS, EFS, APIGateway, ALB, NLB, NATGateway, Route53, SQS, SNS, Kinesis
 
-DO NOT IMPORT - Use as Cluster labels instead:
-DynamoDB, CloudWatch, CloudTrail, VPC, Subnet, SecurityGroup, RDSProxy, DynamoDB
+DO NOT IMPORT (use as Cluster labels only):
+DynamoDB, CloudWatch, CloudTrail, VPC, Subnet, SecurityGroup, RDSProxy
 
-TEMPLATE WITH CLUSTER:
+EXAMPLE - CORRECT:
 import os
 from diagrams import Diagram, Cluster
 from diagrams.aws.compute import Lambda
@@ -232,21 +236,25 @@ from diagrams.aws.database import RDS
 
 os.makedirs("output", exist_ok=True)
 
-with Diagram("Title", show=False, filename="output/diagram", direction="TB"):
+with Diagram("Serverless API", show=False, filename="output/diagram", direction="TB"):
     api = APIGateway("API Gateway")
-
-    with Cluster("Backend Services"):
-        func = Lambda("Function")
-        db = RDS("Database")
-
+    with Cluster("Compute"):
+        func = Lambda("Lambda Function")
+    with Cluster("Data"):
+        db = RDS("PostgreSQL")
+    with Cluster("Storage"):
+        s3 = S3("S3 Bucket")
     api >> func >> db
+    func >> s3
 
-KEY POINTS:
-- Nodes inside Clusters are created with "with Cluster(...):" indentation
-- Connections are between individual nodes (api, func, db)
-- Never do: cluster1 >> cluster2 (WRONG!)
-- Always do: node1 >> node2 (inside or across clusters) (CORRECT!)
-- If service not in imports (like DynamoDB), represent it as: with Cluster("DynamoDB"): with no nodes inside
+CRITICAL CHECKLIST BEFORE RETURNING CODE:
+☑ Every opening quote has closing quote on SAME LINE
+☑ Every opening parenthesis has closing parenthesis
+☑ All node definitions are complete: variable = Service("Label")
+☑ No lines are cut off or incomplete
+☑ All imports exist at top of file
+☑ Connections only between nodes (var1 >> var2), never between Clusters
+☑ No explanations, only Python code
 """
 
     def invoke(self, blueprint: dict[str, Any]) -> str:
@@ -305,9 +313,39 @@ KEY POINTS:
         """
         import re
 
-        # Check for Cluster >> Cluster pattern (common error)
-        # Look for patterns like: variable_name >> variable_name where both are Clusters
         lines = code.split("\n")
+
+        # 1. Check for unterminated strings (strings without closing quote)
+        for idx, line in enumerate(lines, 1):
+            # Skip comments and lines without quotes
+            if line.strip().startswith("#"):
+                continue
+
+            # Check for unterminated string literals
+            # Count quotes and ensure they're balanced on each line (simple check)
+            single_quotes = line.count("'")
+            double_quotes = line.count('"')
+
+            # Count escaped quotes to exclude them from count
+            escaped_single = line.count("\\'")
+            escaped_double = line.count('\\"')
+
+            # Unescaped quotes should be even (paired)
+            actual_single = single_quotes - escaped_single
+            actual_double = double_quotes - escaped_double
+
+            if actual_single % 2 != 0 or actual_double % 2 != 0:
+                logger.warning(f"⚠️ Possible unterminated string on line {idx}: {line.strip()}")
+                raise ValueError(f"Unterminated string on line {idx}: {line.strip()}")
+
+        # 2. Check for unmatched parentheses
+        open_parens = code.count("(")
+        close_parens = code.count(")")
+        if open_parens != close_parens:
+            logger.warning(f"⚠️ Unmatched parentheses: {open_parens} open, {close_parens} close")
+            raise ValueError(f"Unmatched parentheses in generated code")
+
+        # 3. Check for Cluster >> Cluster pattern (common error)
         cluster_vars = set()
         node_vars = set()
 

@@ -1,10 +1,11 @@
 """Diagram generation module"""
 
-import tempfile
 import subprocess
 from pathlib import Path
 from typing import Optional
 import logging
+
+from src.infrastructure.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -13,7 +14,7 @@ class DiagramGenerator:
     """Generates diagrams using the diagrams package"""
 
     def __init__(self) -> None:
-        self.temp_dir = Path(tempfile.gettempdir()) / "aws_diagrams"
+        self.temp_dir = settings.diagrams_storage_path
         self.temp_dir.mkdir(parents=True, exist_ok=True)
 
     def generate(

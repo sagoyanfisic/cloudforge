@@ -62,8 +62,9 @@ except ValueError as e:
     logger.warning(f"⚠️ LangGraph Pipeline disabled: {str(e)}")
 
 # Storage path for diagram images
-STORAGE_PATH = Path.home() / ".cloudforge" / "diagrams"
-STORAGE_PATH.mkdir(parents=True, exist_ok=True)
+# Use configured path from settings (AWS_DIAGRAM_DIAGRAMS_STORAGE_PATH env var or default)
+STORAGE_PATH = settings.diagrams_storage_path
+logger.info(f"📁 Using storage path: {STORAGE_PATH}")
 
 
 # ============================================================================
