@@ -163,15 +163,20 @@ LangChain provides:
 ### Auto-Retry with Exponential Backoff
 
 ```python
-llm.with_retry(stop_after_attempt=3, wait_random_min=1, wait_random_max=3)
+llm.with_retry(stop_after_attempt=3, wait_exponential_jitter=True)
 ```
 
 Attempt flow:
 ```
-1st attempt fails → Wait 1-3s → 2nd attempt
-2nd attempt fails → Wait 1-3s → 3rd attempt
+1st attempt fails → Wait (exponential backoff with jitter) → 2nd attempt
+2nd attempt fails → Wait (exponential backoff with jitter) → 3rd attempt
 3rd attempt fails → Raise exception
 ```
+
+With `wait_exponential_jitter=True`:
+- Implements exponential backoff (delays increase with each attempt)
+- Adds randomness (jitter) to prevent synchronized retries
+- Automatically handles timing between attempts
 
 ### Structured Output Validation
 

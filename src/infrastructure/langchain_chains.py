@@ -96,8 +96,7 @@ class BlueprintArchitectChain:
             max_output_tokens=5000,
         ).with_retry(
             stop_after_attempt=3,
-            wait_random_min=1,
-            wait_random_max=3,
+            wait_exponential_jitter=True,
         )
 
         self.parser = PydanticOutputParser(pydantic_object=BlueprintAnalysisOutput)
@@ -198,8 +197,7 @@ class DiagramCoderChain:
             max_output_tokens=5000,
         ).with_retry(
             stop_after_attempt=3,
-            wait_random_min=1,
-            wait_random_max=3,
+            wait_exponential_jitter=True,
         )
 
         self.system_prompt = """You are CloudForge Diagram Coder. Generate Python diagrams code.
