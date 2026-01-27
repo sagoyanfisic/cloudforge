@@ -396,6 +396,7 @@ COMMON PATTERNS:
         """Enrich analysis with AWS best practices from AWS Documentation MCP
 
         Optionally calls AWS Documentation server to get real-time best practices.
+        Skipped in Docker environments where uvx may not be available.
 
         Args:
             text: Architecture description
@@ -406,13 +407,17 @@ COMMON PATTERNS:
         if not HAS_AWS_MCP or get_aws_documentation_client is None:
             return ""
 
+        # Skip AWS MCP enrichment in Docker/container environments (uvx may not be available)
+        if os.getenv("CLOUDFORGE_DISABLE_AWS_MCP", "1") == "1":
+            return ""
+
         try:
             logger.info("🔍 Enriching with AWS best practices from documentation server...")
             doc_client = get_aws_documentation_client()
 
             if not doc_client.is_connected():
                 if not doc_client.connect():
-                    logger.warning("⚠️ Could not connect to AWS Documentation server")
+                    logger.debug("ℹ️ AWS Documentation server not available (optional feature)")
                     return ""
 
             # Extract key services from description
@@ -634,6 +639,7 @@ CLUSTER EXAMPLES (Logical groupings):
         """Fix incomplete strings that were truncated by Gemini.
 
         Handles patterns like:
+        - with Cluster("Main VPC)  (missing closing quote)
         - with Diagram("Title...", show=False, filename="output/...  (missing closing paren)
         - api >> func >> db_sql >> (missing target)
         - direction="  (missing quote and value)
@@ -655,8 +661,38 @@ CLUSTER EXAMPLES (Logical groupings):
                 fixed_lines.append(line)
                 continue
 
-            # Detect truncated lines by looking for incomplete parameter patterns
-            # Pattern: parameter_name="  or parameter_name=' or parameter_name=
+            # First: detect and fix unterminated strings (most common issue)
+            # Count quotes to find unclosed strings
+            double_quote_count = 0
+            single_quote_count = 0
+            in_escape = False
+
+            for char in stripped:
+                if char == '\\':
+                    in_escape = True
+                elif char == '"' and not in_escape:
+                    double_quote_count += 1
+                elif char == "'" and not in_escape:
+                    single_quote_count += 1
+                else:
+                    in_escape = False
+
+            # If odd number of quotes, string is unclosed
+            if double_quote_count % 2 == 1:
+                logger.warning(f"⚠️ Line {i+1} has unclosed double-quoted string: {stripped[-50:]}")
+                # Close the string based on context
+                if 'Cluster' in stripped or 'with Cluster' in stripped:
+                    line = stripped + '")'
+                elif 'Diagram' in stripped:
+                    line = stripped + '")'
+                else:
+                    line = stripped + '"'
+
+            if single_quote_count % 2 == 1:
+                logger.warning(f"⚠️ Line {i+1} has unclosed single-quoted string: {stripped[-50:]}")
+                line = stripped + "'"
+
+            # Detect truncated parameter patterns
             if any(stripped.endswith(p) for p in ['direction="', 'filename="', 'direction=', 'filename=']):
                 logger.warning(f"⚠️ Line {i+1} has truncated parameter: {stripped[-40:]}")
 
@@ -673,7 +709,6 @@ CLUSTER EXAMPLES (Logical groupings):
             # Check for lines ending with opening parenthesis without close
             elif stripped.endswith('('):
                 logger.warning(f"⚠️ Line {i+1} has unclosed parenthesis: {stripped[-40:]}")
-                # This is likely a continuation, add placeholder
                 line = stripped + ')'
 
             # Check for unmatched parentheses
@@ -699,7 +734,7 @@ CLUSTER EXAMPLES (Logical groupings):
         if total_open > total_close:
             remaining_parens = total_open - total_close
             logger.warning(f"⚠️ Code is missing {remaining_parens} closing paren(s), adding to end")
-            # Add closing parens before the last colon if it's a with statement
+            # Add closing parens on last line
             if '\n' in fixed_code:
                 lines_fixed = fixed_code.split('\n')
                 lines_fixed[-1] = lines_fixed[-1] + ')' * remaining_parens
