@@ -13,7 +13,7 @@ from .validator import DiagramValidator
 from .generator import DiagramGenerator
 from .storage import DiagramStorage
 from .config import settings
-from .natural_language import NaturalLanguageProcessor
+from .langgraph_pipeline import DiagramPipeline
 
 # Configure logging
 logging.basicConfig(level=getattr(logging, settings.log_level))
@@ -27,15 +27,15 @@ validator = DiagramValidator()
 generator = DiagramGenerator()
 storage = DiagramStorage()
 
-# Initialize natural language processor (optional - requires GOOGLE_API_KEY)
+# Initialize LangGraph pipeline (optional - requires GOOGLE_API_KEY)
 try:
-    nl_processor = NaturalLanguageProcessor()
-    nl_enabled = True
-    logger.info("✅ Natural Language Processing enabled")
+    pipeline = DiagramPipeline(max_retries=3)
+    pipeline_enabled = True
+    logger.info("✅ LangGraph Pipeline enabled (with auto-retry)")
 except ValueError:
-    nl_processor = None
-    nl_enabled = False
-    logger.warning("⚠️ Natural Language Processing disabled (GOOGLE_API_KEY not set)")
+    pipeline = None
+    pipeline_enabled = False
+    logger.warning("⚠️ LangGraph Pipeline disabled (GOOGLE_API_KEY not set)")
 
 
 @server.tool()
@@ -263,71 +263,88 @@ def generate_from_description(
 ) -> dict[str, Any]:
     """Generate AWS architecture diagram from natural language description.
 
-    Uses AI agents to:
-    1. Architect: Analyzes text and creates technical blueprint
-    2. Coder: Generates Python code from blueprint
-    3. Generator: Executes code and creates diagram
+    Uses LangGraph Pipeline with auto-retry for reliability:
+    1. Blueprint Architect: Analyzes text → structured blueprint
+    2. Diagram Coder: Blueprint → Python code (with LangChain retry)
+    3. Validator: AST + security validation
+    4. Generator: Code → diagram images (PNG, PDF, SVG)
+
+    Features:
+    - Automatic retries on failure (up to 3x)
+    - Structured output parsing with Pydantic
+    - Comprehensive error handling
+    - Observability via LangChain/LangSmith
 
     Args:
-        description: Natural language description of the architecture
-                    (e.g., "IoT system with Kinesis, Lambda, S3...")
-        diagram_name: Name for the diagram
+        description: Natural language architecture description
+        diagram_name: Diagram name
 
     Returns:
-        Dictionary with generation result including blueprint and output files
+        dict: {success, blueprint, code, validation, output_files, errors}
 
     Requires:
-        GOOGLE_API_KEY environment variable set for Gemini API access
+        GOOGLE_API_KEY environment variable for Gemini API
     """
-    if not nl_enabled:
+    if not pipeline_enabled:
         return {
             "success": False,
-            "message": "Natural Language Processing not available. Set GOOGLE_API_KEY environment variable.",
+            "message": "LangGraph Pipeline not available. Set GOOGLE_API_KEY environment variable.",
         }
 
     try:
-        logger.info(f"🤖 Processing natural language description: {diagram_name}")
+        logger.info(f"🤖 Processing with LangGraph Pipeline: {diagram_name}")
 
-        # Step 1: Process description through AI agents
-        result = nl_processor.process(description, output_filename=diagram_name)
+        # Run pipeline (with auto-retry logic)
+        result = pipeline.generate(description, diagram_name)
 
-        blueprint_text = result["blueprint"]
-        generated_code = result["code"]
+        if not result.get("success"):
+            logger.warning(f"⚠️ Pipeline failed: {result.get('errors', [])}")
+            return result
 
-        logger.info(f"📋 Blueprint created:\n{blueprint_text}")
+        # Extract results
+        blueprint = result.get("blueprint")
+        code = result.get("code")
+        validation = result.get("validation")
+        output_files = result.get("output_files", {})
 
-        # Step 2: Generate diagram from code
-        output_files = generator.generate(generated_code, diagram_name, settings.output_formats)
-
-        if not output_files:
-            return {
-                "success": False,
-                "message": "Diagram generation failed after code creation",
-                "blueprint": blueprint_text,
-                "code": generated_code,
-            }
-
-        # Step 3: Format response
+        # Format response
         output_text = f"✅ Diagram generated from description: {diagram_name}\n\n"
         output_text += "📋 Technical Blueprint:\n"
-        output_text += blueprint_text + "\n"
+        output_text += f"Title: {blueprint.get('title', 'N/A')}\n"
+        output_text += f"Description: {blueprint.get('description', 'N/A')}\n"
+        output_text += f"Services: {len(blueprint.get('nodes', []))}\n"
+        output_text += f"Connections: {len(blueprint.get('relationships', []))}\n\n"
+
+        if validation:
+            output_text += "✔️ Validation Results:\n"
+            output_text += f"  - Valid: {validation.get('is_valid', False)}\n"
+            output_text += f"  - Components: {validation.get('component_count', 0)}\n"
+            output_text += f"  - Relationships: {validation.get('relationship_count', 0)}\n"
+            output_text += f"  - Errors: {len(validation.get('errors', []))}\n"
+            output_text += f"  - Warnings: {len(validation.get('warnings', []))}\n\n"
+
         output_text += "Generated formats:\n"
         for fmt, path in output_files.items():
             output_text += f"  - {fmt}: {path}\n"
 
+        logger.info(f"✅ Pipeline completed successfully")
+
         return {
             "success": True,
             "message": output_text,
-            "blueprint": blueprint_text,
-            "code": generated_code,
+            "blueprint": blueprint,
+            "code": code,
+            "validation": validation,
             "output_files": output_files,
+            "errors": result.get("errors", []),
         }
 
     except Exception as e:
-        logger.error(f"❌ Natural language processing failed: {str(e)}")
+        logger.error(f"❌ Pipeline execution failed: {str(e)}")
         return {
             "success": False,
-            "message": f"Processing failed: {str(e)}",
+            "message": f"Pipeline failed: {str(e)}",
+            "errors": [str(e)],
         }
 
 
