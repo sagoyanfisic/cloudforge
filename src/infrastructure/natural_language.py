@@ -136,7 +136,7 @@ COMMON PATTERNS:
             raise ValueError("GOOGLE_API_KEY environment variable not set")
 
         genai.configure(api_key=key)
-        self.model = genai.GenerativeModel("gemini-2.5-flash")
+        self.model = genai.GenerativeModel("gemini-1.5-flash")
 
     def analyze(self, raw_text: str) -> ArchitectureBlueprint:
         """Analyze raw text and generate blueprint.
@@ -160,8 +160,8 @@ COMMON PATTERNS:
             response = self.model.generate_content(
                 [system_prompt, f"\nUser input:\n{raw_text}"],
                 generation_config=genai.types.GenerationConfig(
-                    temperature=0.2,  # Low for analytical thinking
-                    max_output_tokens=4000,  # Increased from 2000 to avoid truncation
+                    temperature=0.05,  # Very low for analytical precision
+                    max_output_tokens=5000,  # Increased to avoid truncation
                 ),
             )
 
@@ -460,72 +460,33 @@ class DiagramCoder:
     - Ensure code is clean and runnable
     """
 
-    SYSTEM_PROMPT = """You are CloudForge-Core. Your goal is to generate executable Python code using the `diagrams` library based EXACTLY on the provided Blueprint.
+    SYSTEM_PROMPT = """Generate Python code using diagrams library. Output ONLY valid Python code.
 
-### VALID AWS SERVICE CLASSES (ONLY import and use these)
-**Compute:** EC2, Lambda, ECS, ElasticBeanstalk, AutoScaling, Batch
-**Database:** RDS, DynamoDB, ElastiCache, DAX, Redshift, DocumentDB, AppSync
-**Network:** APIGateway, ALB, NLB, ELB, Route53, CloudFront, NATGateway, VPCEndpoint, DirectConnect, VPN
-**Storage:** S3, EBS, EFS, Glacier, StorageGateway, FSx
-**Integration:** SQS, SNS, SES, Kinesis, KinesisFirehose
-**Analytics:** Athena, EMR, QuickSight, DataPipeline, Glue
-**Management:** CloudWatch, CloudTrail, SystemsManager, CloudFormation
-**Security:** IAM, KMS, SecretsManager, Shield, WAF, GuardDuty
+CRITICAL RULES:
+1. EVERY string parameter MUST end with closing quote
+2. EVERY opening parenthesis MUST have matching closing parenthesis
+3. NO markdown blocks, NO explanations, ONLY code
+4. Keep code SHORT and COMPLETE (no truncation)
 
-### LOGICAL CONCEPTS (Use in Cluster names ONLY, do NOT import)
-- **VPC:** Use as Cluster("VPC - Private Subnet") or Cluster("VPC - Public Subnet")
-- **Subnet:** Use as Cluster("Private Subnet") or Cluster("Public Subnet")
-- **SecurityGroup:** Use as Cluster("Security Group") but do NOT import
-- **RDSProxy:** Use concept name in Cluster, map to RDS node
-
-DO NOT IMPORT: VPC, Subnet, SecurityGroup, RDSProxy, CloudFlare, custom classes, AWS::* notation
-
-### CRITICAL RULES
-1. **Output:** Return ONLY raw Python code. Do NOT use Markdown blocks (```).
-2. **Imports:** Use ONLY valid class names from list above. Import from correct sub-modules.
-3. **Setup:** ALWAYS import `os` and run `os.makedirs("output", exist_ok=True)`.
-4. **Diagram:** Use `with Diagram(..., show=False, filename="output/...", direction="TB"):`.
-5. **Nodes:** Map each Blueprint node to a valid AWS class. If unclear, use closest match and note it.
-6. **NO Abstract Concepts:** Don't use SecurityGroup, Subnet, or VPC as visible nodes (they're logical).
-
-### REFERENCE TEMPLATE (MIMIC THIS CODING STYLE)
+MINIMAL TEMPLATE (modify ONLY variable names):
 import os
 from diagrams import Diagram, Cluster
-from diagrams.aws.compute import ECS, Lambda
+from diagrams.aws.compute import Lambda
 from diagrams.aws.database import RDS, DynamoDB
-from diagrams.aws.network import ALB
-from diagrams.aws.storage import S3
-from diagrams.aws.integration import SQS
+from diagrams.aws.network import APIGateway
 
-# 1. Setup Output Directory
 os.makedirs("output", exist_ok=True)
 
-# 2. Initialize Diagram
-with Diagram("Architecture Name", show=False, filename="output/arch_name", direction="TB"):
-    # 3. Define Global Nodes
-    lb = ALB("Load Balancer")
-    s3 = S3("Storage")
+with Diagram("Title", show=False, filename="output/diagram", direction="TB"):
+    api = APIGateway("API")
+    func = Lambda("Func")
+    db = RDS("DB")
+    api >> func >> db
 
-    # 4. Define Clusters (if any in Blueprint)
-    with Cluster("Service Logic"):
-        app = ECS("App Service")
-        worker = Lambda("Worker Lambda")
-        queue = SQS("Task Queue")
+VALID IMPORTS ONLY: Lambda, RDS, DynamoDB, APIGateway, S3, SQS, SNS, Kinesis, CloudWatch, ElastiCache
+NEVER USE: VPC, Subnet, SecurityGroup, RDSProxy (these go in Cluster names only)
 
-    # 5. Define Storage/DB
-    db = RDS("Primary DB")
-    cache = DynamoDB("Cache")
-
-    # 6. Define Flows
-    lb >> app
-    app >> db
-    app >> cache
-    app >> queue
-    queue >> worker
-    worker >> s3
-
-### INSTRUCTION
-Convert the User's Blueprint into Python code following the Reference Template above. Return ONLY the Python code, no explanations.
+RULE: If you need logical grouping, use with Cluster("GroupName"): not imports
 """
 
     def __init__(self, api_key: Optional[str] = None):
@@ -539,7 +500,8 @@ Convert the User's Blueprint into Python code following the Reference Template a
             raise ValueError("GOOGLE_API_KEY environment variable not set")
 
         genai.configure(api_key=key)
-        self.model = genai.GenerativeModel("gemini-2.5-flash")
+        # Use gemini-1.5-flash for balance of speed and quality
+        self.model = genai.GenerativeModel("gemini-1.5-flash")
 
     def generate_code(self, blueprint: ArchitectureBlueprint) -> str:
         """Generate Python code from blueprint.
@@ -566,8 +528,8 @@ Convert the User's Blueprint into Python code following the Reference Template a
             response = self.model.generate_content(
                 [system_prompt, f"\nBlueprint:\n{blueprint_text}"],
                 generation_config=genai.types.GenerationConfig(
-                    temperature=0.1,  # Very low for code precision
-                    max_output_tokens=3000,
+                    temperature=0.05,  # Even lower for precision
+                    max_output_tokens=5000,  # Increased to avoid truncation
                 ),
             )
 
@@ -575,6 +537,9 @@ Convert the User's Blueprint into Python code following the Reference Template a
 
             # Remove markdown formatting if present
             code = code.replace("```python", "").replace("```", "").strip()
+
+            # Fix incomplete strings (safety fix for Gemini truncation)
+            code = self._fix_incomplete_strings(code)
 
             # Basic validation
             if "import" not in code or "Diagram" not in code:
@@ -589,6 +554,85 @@ Convert the User's Blueprint into Python code following the Reference Template a
         except Exception as e:
             logger.error(f"❌ Code generation failed: {str(e)}")
             raise
+
+    def _fix_incomplete_strings(self, code: str) -> str:
+        """Fix incomplete strings that were truncated by Gemini.
+
+        Handles patterns like:
+        - with Diagram("Title...", show=False, filename="output/...  (missing closing paren)
+        - api >> func >> db_sql >> (missing target)
+        - direction="  (missing quote and value)
+
+        Args:
+            code: Generated code (possibly with truncated strings)
+
+        Returns:
+            str: Code with fixed strings
+        """
+        lines = code.split("\n")
+        fixed_lines = []
+
+        for i, line in enumerate(lines):
+            stripped = line.rstrip()
+
+            # Skip empty lines and comments
+            if not stripped or stripped.startswith("#"):
+                fixed_lines.append(line)
+                continue
+
+            # Detect truncated lines by looking for incomplete parameter patterns
+            # Pattern: parameter_name="  or parameter_name=' or parameter_name=
+            if any(stripped.endswith(p) for p in ['direction="', 'filename="', 'direction=', 'filename=']):
+                logger.warning(f"⚠️ Line {i+1} has truncated parameter: {stripped[-40:]}")
+
+                # Complete the parameter based on what's incomplete
+                if stripped.endswith('direction="'):
+                    line = stripped + 'TB")'
+                elif stripped.endswith('direction='):
+                    line = stripped + '"TB")'
+                elif stripped.endswith('filename="'):
+                    line = stripped + 'output/diagram")'
+                elif stripped.endswith('filename='):
+                    line = stripped + '"output/diagram")'
+
+            # Check for lines ending with opening parenthesis without close
+            elif stripped.endswith('('):
+                logger.warning(f"⚠️ Line {i+1} has unclosed parenthesis: {stripped[-40:]}")
+                # This is likely a continuation, add placeholder
+                line = stripped + ')'
+
+            # Check for unmatched parentheses
+            open_parens = line.count('(')
+            close_parens = line.count(')')
+            if open_parens > close_parens:
+                paren_diff = open_parens - close_parens
+                logger.warning(f"⚠️ Line {i+1} missing {paren_diff} closing paren(s): {line[:60]}...")
+                line = line + ')' * paren_diff
+
+            # Ensure arrow chains don't end abruptly
+            if stripped.endswith(">>"):
+                logger.warning(f"⚠️ Line {i+1} ends with incomplete arrow operator")
+                line = stripped + " None"
+
+            fixed_lines.append(line)
+
+        fixed_code = "\n".join(fixed_lines)
+
+        # Final pass: balance any remaining parentheses in the entire code
+        total_open = fixed_code.count('(')
+        total_close = fixed_code.count(')')
+        if total_open > total_close:
+            remaining_parens = total_open - total_close
+            logger.warning(f"⚠️ Code is missing {remaining_parens} closing paren(s), adding to end")
+            # Add closing parens before the last colon if it's a with statement
+            if '\n' in fixed_code:
+                lines_fixed = fixed_code.split('\n')
+                lines_fixed[-1] = lines_fixed[-1] + ')' * remaining_parens
+                fixed_code = '\n'.join(lines_fixed)
+            else:
+                fixed_code = fixed_code + ')' * remaining_parens
+
+        return fixed_code
 
     def _validate_code_syntax(self, code: str, blueprint_text: str) -> None:
         """Validate Python code syntax and diagrams imports.
