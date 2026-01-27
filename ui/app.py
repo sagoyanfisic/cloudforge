@@ -1,485 +1,314 @@
-"""CloudForge Streamlit UI - Web interface for AWS architecture diagram generation"""
+"""CloudForge Streamlit Web UI
+
+Interactive interface for generating AWS architecture diagrams from natural language.
+Displays validation results, blueprints, code, and diagram images.
+"""
 
 import os
 import sys
+import streamlit as st
 from pathlib import Path
 
-import streamlit as st
-from api_client import CloudForgeAPIClient
+# Add parent directory to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
-# Set page configuration
+from ui.api_client import CloudForgeAPIClient
+
+# Configure page
 st.set_page_config(
     page_title="CloudForge",
-    page_icon="🔥",
+    page_icon="🏗️",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-# Add custom CSS
-st.markdown(
-    """
-    <style>
-    .validation-panel {
-        padding: 1rem;
-        border-radius: 0.5rem;
-        margin-top: 1rem;
-    }
-    .metric-card {
-        padding: 1rem;
-        border-radius: 0.5rem;
-        background-color: #f0f2f6;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
+# Get API URL from environment or use default
+API_URL = os.getenv("CLOUDFORGE_API_URL", "http://localhost:8000")
 
 # Initialize API client
-# Use api:8000 for requests from Docker, localhost:8000 for browser access to images
-api_base_url = os.getenv("CLOUDFORGE_API_URL", "http://localhost:8000")
-api_client = CloudForgeAPIClient(base_url=api_base_url)
-
-# For images, always use localhost since the browser needs to access it
-# (even when running in Docker)
-image_base_url = os.getenv("CLOUDFORGE_IMAGE_URL", "http://localhost:8000")
+api_client = CloudForgeAPIClient(base_url=API_URL)
 
 # Initialize session state
 if "current_diagram" not in st.session_state:
     st.session_state.current_diagram = None
-if "generation_in_progress" not in st.session_state:
-    st.session_state.generation_in_progress = False
-if "pending_generation" not in st.session_state:
-    st.session_state.pending_generation = False
-if "pending_description" not in st.session_state:
-    st.session_state.pending_description = ""
-if "pending_name" not in st.session_state:
-    st.session_state.pending_name = ""
+if "api_status" not in st.session_state:
+    st.session_state.api_status = None
 
 
 # ============================================================================
-# Header
+# Utility Functions
 # ============================================================================
 
 
-def render_header():
-    """Render page header"""
-    st.markdown(
-        """
-    # 🔥 CloudForge
-    ### AI-Powered AWS Architecture Diagram Generator
-    Generate professional AWS architecture diagrams from natural language descriptions.
-    """
-    )
-
-
-# ============================================================================
-# Main Editor Panel
-# ============================================================================
-
-
-def _handle_generate_click(description: str, diagram_name: str):
-    """Callback for Generate button - stores pending request in session state
-
+def render_validation_panel(validation: dict) -> None:
+    """Render AST validation panel.
+    
     Args:
-        description: Architecture description
-        diagram_name: Diagram name
+        validation: Validation response from API
     """
-    if not description or not description.strip():
-        st.error("Please enter an architecture description")
-        return
-    if not diagram_name or not diagram_name.strip():
-        st.error("Please enter a diagram name")
+    if not validation:
         return
 
-    # Store pending request
-    st.session_state.pending_description = description.strip()
-    st.session_state.pending_name = diagram_name.strip()
-    st.session_state.pending_generation = True
+    st.markdown("### ✔️ Validation Results")
 
-
-def render_editor_panel():
-    """Render the main diagram editor panel"""
-    st.markdown("## 📝 Architecture Description")
-
-    description = st.text_area(
-        "Describe your AWS architecture:",
-        height=200,
-        placeholder="Example: An IoT system where sensors send data to Kinesis, which triggers Lambda functions that process and store results in DynamoDB, with CloudWatch monitoring.",
-        label_visibility="collapsed",
-        key="editor_description",
-    )
-
-    diagram_name = st.text_input(
-        "Diagram Name:",
-        placeholder="e.g., iot_pipeline, microservices_app, etc.",
-        label_visibility="collapsed",
-        key="editor_name",
-    )
-
-    col1, col2, col3 = st.columns([2, 2, 2])
-
-    with col1:
-        st.button(
-            "🚀 Generate Architecture",
-            use_container_width=True,
-            type="primary",
-            on_click=_handle_generate_click,
-            args=(description, diagram_name),
-            disabled=st.session_state.generation_in_progress,
-        )
-
-    with col2:
-        st.button(
-            "🔄 Reset",
-            use_container_width=True,
-            on_click=lambda: st.session_state.update({
-                "current_diagram": None,
-                "pending_generation": False,
-                "pending_description": "",
-                "pending_name": "",
-            }),
-            disabled=st.session_state.generation_in_progress,
-        )
-
-    with col3:
-        api_status = "✅ Connected" if api_client.health_check() else "❌ Offline"
-        st.info(api_status, icon="🔌")
-
-    return description, diagram_name
-
-
-# ============================================================================
-# Validation Panel
-# ============================================================================
-
-
-def render_validation_panel(diagram: dict):
-    """Render AST validation panel with complete analysis
-
-    Args:
-        diagram: The generated diagram response dictionary
-    """
-    if not diagram or not diagram.get("validation"):
-        return
-
-    st.markdown("## ✔️ Code Validation (AST Analysis)")
-
-    validation = diagram.get("validation", {})
-
-    # Overall status
+    # Status badge
     if validation.get("is_valid"):
-        st.success("✅ Code validation passed", icon="✅")
+        st.success("✅ Code validation passed")
     else:
-        st.error("❌ Validation failed", icon="❌")
+        st.error("❌ Code validation failed")
 
     # Metrics
     col1, col2, col3, col4 = st.columns(4)
-
     with col1:
-        st.metric(
-            "Components",
-            validation.get("component_count", 0),
-            help="Number of AWS components detected",
-        )
-
+        st.metric("Components", validation.get("component_count", 0))
     with col2:
-        st.metric(
-            "Relationships",
-            validation.get("relationship_count", 0),
-            help="Number of connections between components",
-        )
-
+        st.metric("Relationships", validation.get("relationship_count", 0))
     with col3:
-        error_count = len(validation.get("errors", []))
-        st.metric(
-            "Errors",
-            error_count,
-            help="Critical issues that prevent diagram generation",
-        )
-
+        st.metric("Errors", len(validation.get("errors", [])))
     with col4:
-        warning_count = len(validation.get("warnings", []))
-        st.metric(
-            "Warnings",
-            warning_count,
-            help="Non-critical issues and security concerns",
-        )
+        st.metric("Warnings", len(validation.get("warnings", [])))
 
     # Errors
     errors = validation.get("errors", [])
     if errors:
-        st.error(f"**{len(errors)} Validation Error(s):**")
-        for error in errors:
-            with st.expander(f"❌ {error.get('field', 'Unknown')}"):
-                st.write(f"**Message:** {error.get('message', 'No message')}")
-                st.write(f"**Severity:** {error.get('severity', 'unknown')}")
+        with st.expander(f"❌ Errors ({len(errors)})"):
+            for error in errors:
+                st.error(f"**{error.get('field', 'Unknown')}**: {error.get('message', 'No message')}")
 
     # Warnings
     warnings = validation.get("warnings", [])
     if warnings:
-        st.warning(f"**{len(warnings)} Warning(s):**")
-        for warning in warnings:
-            with st.expander(f"⚠️ {warning.get('field', 'Unknown')}"):
-                st.write(f"**Message:** {warning.get('message', 'No message')}")
-                st.write(f"**Severity:** {warning.get('severity', 'unknown')}")
-
-    # Security analysis
-    security_warnings = [
-        w for w in warnings if w.get("field") == "security"
-    ]
-    if security_warnings:
-        with st.expander("🔒 Security Analysis"):
-            for sw in security_warnings:
-                st.warning(sw.get("message", "No message"))
+        with st.expander(f"⚠️ Warnings ({len(warnings)})"):
+            for warning in warnings:
+                st.warning(f"**{warning.get('field', 'Unknown')}**: {warning.get('message', 'No message')}")
 
 
-# ============================================================================
-# Code Panel
-# ============================================================================
-
-
-def render_code_panel(diagram: dict):
-    """Render generated code panel
-
+def render_diagram_image(output_files: dict) -> None:
+    """Render diagram image with expander for full size.
+    
     Args:
-        diagram: The generated diagram response dictionary
+        output_files: Dict of format -> file path from API
     """
-    if not diagram or not diagram.get("code"):
+    if not output_files or "png" not in output_files:
+        st.warning("No diagram image available")
         return
 
-    st.markdown("## 💻 Generated Python Code")
+    png_path = output_files.get("png", "")
+    if not png_path:
+        return
 
-    code = diagram.get("code", "")
+    # Get image URL
+    png_url = api_client.get_image_url(Path(png_path).name)
 
-    with st.expander("View Generated Code", expanded=False):
+    # Display thumbnail in columns
+    col_thumb, col_expand = st.columns([3, 1])
+
+    with col_thumb:
+        st.image(png_url, use_column_width=True, caption="AWS Architecture Diagram")
+
+    with col_expand:
+        if st.button("🔍 Expand", key="expand_image"):
+            st.session_state.show_full_image = True
+
+    # Show full size in expander if requested
+    if st.session_state.get("show_full_image"):
+        with st.expander("Full Size Diagram", expanded=True):
+            st.image(png_url, use_column_width=True)
+
+
+def render_blueprint_panel(blueprint: dict) -> None:
+    """Render blueprint details panel.
+    
+    Args:
+        blueprint: Blueprint dict from API
+    """
+    if not blueprint:
+        return
+
+    with st.expander("📋 Technical Blueprint"):
+        st.markdown(f"**Title**: {blueprint.get('title', 'N/A')}")
+        st.markdown(f"**Description**: {blueprint.get('description', 'N/A')}")
+
+        if blueprint.get("nodes"):
+            st.markdown("**Services**:")
+            for node in blueprint.get("nodes", []):
+                st.markdown(
+                    f"- {node.get('name')} ({node.get('service_type')}) "
+                    f"[{node.get('region', 'default')}]"
+                )
+
+        if blueprint.get("relationships"):
+            st.markdown("**Connections**:")
+            for rel in blueprint.get("relationships", []):
+                st.markdown(
+                    f"- {rel.get('source')} → {rel.get('destination')} "
+                    f"({rel.get('connection_type', 'default')})"
+                )
+
+
+def render_code_panel(code: str) -> None:
+    """Render generated Python code panel.
+    
+    Args:
+        code: Generated Python code
+    """
+    if not code:
+        return
+
+    with st.expander("💻 Generated Code"):
         st.code(code, language="python")
 
-        col1, col2 = st.columns(2)
+
+def render_history_panel() -> None:
+    """Render recent diagrams history panel."""
+    st.markdown("### 📚 Recent Diagrams")
+
+    history = api_client.list_diagrams()
+    diagrams = history.get("diagrams", [])
+
+    if not diagrams:
+        st.info("No diagrams saved yet")
+        return
+
+    # Show only last 5
+    for diagram in diagrams[:5]:
+        col1, col2, col3 = st.columns([2, 1, 1])
+
         with col1:
-            st.download_button(
-                "⬇️ Download Code",
-                code,
-                file_name=f"{diagram.get('name', 'diagram')}.py",
-                mime="text/plain",
-            )
+            st.markdown(f"**{diagram.get('name')}**")
+            st.caption(diagram.get("created_at", "")[:10])
+
+        with col2:
+            if st.button("📖 View", key=f"view_{diagram.get('id')}"):
+                st.session_state.view_diagram_id = diagram.get("id")
+                st.rerun()
+
+        with col3:
+            if st.button("🗑️ Delete", key=f"delete_{diagram.get('id')}"):
+                api_client.delete_diagram(diagram.get("id"))
+                st.success("Diagram deleted")
+                st.rerun()
 
 
 # ============================================================================
-# Blueprint Panel
-# ============================================================================
-
-
-def render_blueprint_panel(diagram: dict):
-    """Render technical blueprint panel
-
-    Args:
-        diagram: The generated diagram response dictionary
-    """
-    if not diagram or not diagram.get("blueprint"):
-        return
-
-    st.markdown("## 📋 Technical Blueprint")
-
-    blueprint = diagram.get("blueprint", "")
-
-    with st.expander("View Technical Blueprint", expanded=False):
-        st.markdown(blueprint)
-
-
-# ============================================================================
-# Image Display Panel
-# ============================================================================
-
-
-def render_image_panel(diagram: dict):
-    """Render generated diagram images with compact view and expandable full view
-
-    Args:
-        diagram: The generated diagram response dictionary
-    """
-    if not diagram or not diagram.get("output_files"):
-        return
-
-    st.markdown("## 🖼️ Generated Diagram")
-
-    output_files = diagram.get("output_files", {})
-
-    # Display PNG if available
-    if "png" in output_files:
-        # Use image_base_url for browser access, not api_base_url
-        png_url = f"{image_base_url}{output_files['png']}"
-        try:
-            # Compact view (thumbnail)
-            st.image(png_url, caption="Architecture Diagram (PNG)", width=400)
-
-            # Expandable full view
-            with st.expander("🔍 View Full Size"):
-                st.image(png_url, caption="Architecture Diagram (Full Size)")
-
-        except Exception as e:
-            st.error(f"Failed to load PNG image: {str(e)}")
-            # Show debug info if image fails to load
-            with st.expander("📍 Debug Info"):
-                st.write(f"URL attempted: {png_url}")
-                st.write(f"API URL: {api_base_url}")
-                st.write(f"Image URL: {image_base_url}")
-
-    # Download options for other formats
-    st.markdown("### 📥 Download Formats")
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-        if "pdf" in output_files:
-            pdf_url = f"{image_base_url}{output_files['pdf']}"
-            st.markdown(f"**[📄 PDF]({pdf_url})**")
-
-    with col2:
-        if "svg" in output_files:
-            svg_url = f"{image_base_url}{output_files['svg']}"
-            st.markdown(f"**[🎨 SVG]({svg_url})**")
-
-    with col3:
-        if "png" in output_files:
-            png_url = f"{image_base_url}{output_files['png']}"
-            st.markdown(f"**[🖼️ PNG]({png_url})**")
-
-
-# ============================================================================
-# History Panel
-# ============================================================================
-
-
-def render_history_panel():
-    """Render recent diagrams history panel"""
-    st.markdown("## 📚 Recent Diagrams")
-
-    try:
-        history_response = api_client.get_history()
-
-        if not history_response.get("success"):
-            st.info("No diagrams found yet")
-            return
-
-        diagrams = history_response.get("diagrams", [])
-
-        if not diagrams:
-            st.info("No diagrams in history")
-            return
-
-        for diagram_info in diagrams[:5]:
-            with st.expander(
-                f"📊 {diagram_info.get('name', 'Unnamed')} - {diagram_info.get('created_at', '')[:10]}"
-            ):
-                col1, col2 = st.columns(2)
-
-                with col1:
-                    st.metric(
-                        "Errors",
-                        diagram_info.get("error_count", 0),
-                    )
-
-                with col2:
-                    st.metric(
-                        "Warnings",
-                        diagram_info.get("warning_count", 0),
-                    )
-
-                if st.button(
-                    "Load",
-                    key=f"load_{diagram_info.get('id')}",
-                ):
-                    # Load the diagram
-                    load_response = api_client.get_diagram(diagram_info.get("id"))
-                    if load_response.get("success"):
-                        st.session_state.current_diagram = load_response
-                        st.rerun()
-                    else:
-                        st.error(
-                            f"Failed to load diagram: {load_response.get('message')}"
-                        )
-
-    except Exception as e:
-        st.error(f"Failed to load history: {str(e)}")
-
-
-# ============================================================================
-# Main Application
+# Main UI
 # ============================================================================
 
 
 def main():
-    """Main application entry point"""
-    render_header()
+    """Main Streamlit application."""
+    st.markdown("# 🏗️ CloudForge - AI-Powered AWS Architecture Diagrams")
+    st.markdown(
+        "Generate AWS architecture diagrams from natural language descriptions "
+        "with automated validation and code generation."
+    )
 
-    # Handle pending generation request
-    if st.session_state.pending_generation:
-        st.session_state.generation_in_progress = True
+    # Check API status
+    health = api_client.health_check()
+    st.session_state.api_status = health
 
-        # Use columns to contain the spinner
-        col_spinner, _ = st.columns([1, 2])
+    if health.get("status") == "error":
+        st.error(
+            f"❌ API Connection Failed: {health.get('message')}\n\n"
+            f"Make sure the API is running:\n"
+            f"```\n"
+            f"uvicorn src.api:app --host 0.0.0.0 --port 8000\n"
+            f"```"
+        )
+        return
 
-        with col_spinner:
-            with st.spinner("🔄 Generating diagram..."):
-                result = api_client.generate_diagram(
-                    st.session_state.pending_description,
-                    st.session_state.pending_name,
-                )
+    if not health.get("pipeline_enabled"):
+        st.warning(
+            "⚠️ LangGraph Pipeline not available. "
+            "Set GOOGLE_API_KEY environment variable to enable diagram generation."
+        )
 
-        # Reset pending flag
-        st.session_state.pending_generation = False
-        st.session_state.generation_in_progress = False
+    # Create two columns: main content and sidebar
+    col_main, col_sidebar = st.columns([3, 1])
 
-        # Handle result
-        if result.get("success"):
-            st.session_state.current_diagram = result
-            st.success("✅ Diagram generated successfully!")
-            st.rerun()
-        else:
-            st.error(
-                f"❌ Generation failed: {result.get('message', 'Unknown error')}"
+    # ========================================================================
+    # Main Column: Editor and Results
+    # ========================================================================
+
+    with col_main:
+        st.markdown("## 📝 Describe Your Architecture")
+
+        # Input form
+        col_desc, col_name = st.columns([2, 1])
+
+        with col_desc:
+            description = st.text_area(
+                "Architecture Description",
+                height=150,
+                placeholder=(
+                    "Example: IoT system with Kinesis for data ingestion, "
+                    "Lambda for processing, and DynamoDB for storage"
+                ),
             )
 
-    # Main content area
-    tab1, tab2 = st.tabs(["🚀 Generator", "📚 History"])
+        with col_name:
+            diagram_name = st.text_input(
+                "Diagram Name",
+                placeholder="my_architecture",
+            )
 
-    with tab1:
-        # Left column - Editor
-        col_left, col_right = st.columns([1, 2])
-
-        with col_left:
-            description, diagram_name = render_editor_panel()
-
-        with col_right:
-            if st.session_state.current_diagram:
-                render_image_panel(st.session_state.current_diagram)
+        # Generate button
+        if st.button("🚀 Generate Architecture", type="primary", use_container_width=True):
+            if not description or not diagram_name:
+                st.error("Please provide both description and diagram name")
+            elif not health.get("pipeline_enabled"):
+                st.error("LangGraph Pipeline not available")
             else:
-                st.info("👈 Enter a description and click Generate to create a diagram")
+                with st.spinner("🤖 Generating diagram..."):
+                    result = api_client.generate_diagram(description, diagram_name)
+                    st.session_state.current_diagram = result
 
-        # Show validation panel if diagram exists
+                    if result.get("success"):
+                        st.success("✅ Diagram generated successfully!")
+                    else:
+                        st.error(f"❌ Generation failed: {result.get('message')}")
+
+        # Display results if available
         if st.session_state.current_diagram:
-            st.divider()
-            render_validation_panel(st.session_state.current_diagram)
+            result = st.session_state.current_diagram
 
-            st.divider()
-            col_code, col_blueprint = st.columns(2)
+            if result.get("success"):
+                st.markdown("---")
+                st.markdown("## 🎨 Generated Diagram")
 
-            with col_code:
-                render_code_panel(st.session_state.current_diagram)
+                render_diagram_image(result.get("output_files", {}))
 
-            with col_blueprint:
-                render_blueprint_panel(st.session_state.current_diagram)
+                st.markdown("## 📊 Analysis")
 
-    with tab2:
+                # Validation panel
+                validation = result.get("validation")
+                if validation:
+                    render_validation_panel(validation)
+
+                st.markdown("---")
+
+                # Blueprint and code panels
+                col_blue, col_code = st.columns([1, 1])
+                with col_blue:
+                    render_blueprint_panel(result.get("blueprint"))
+                with col_code:
+                    render_code_panel(result.get("code"))
+
+    # ========================================================================
+    # Sidebar: History and Status
+    # ========================================================================
+
+    with col_sidebar:
+        st.markdown("## 📡 Status")
+
+        if health.get("pipeline_enabled"):
+            st.success("✅ Pipeline Ready")
+        else:
+            st.warning("⚠️ Pipeline Unavailable")
+
+        st.markdown("---")
+
         render_history_panel()
-
-    # Footer
-    st.divider()
-    st.markdown(
-        """
-    ---
-    **CloudForge** | AI-Powered AWS Architecture Diagram Generator
-    """
-    )
 
 
 if __name__ == "__main__":
