@@ -538,12 +538,17 @@ CRITICAL RULES:
 2. EVERY opening parenthesis MUST have matching closing parenthesis
 3. NO markdown blocks, NO explanations, ONLY code
 4. Keep code SHORT and COMPLETE (no truncation)
+5. ONLY import from these modules: compute, database, network, storage, integration
 
-VALID CLASSES TO IMPORT (whitelist):
-Lambda, EC2, ECS, RDS, S3, APIGateway, ALB, NLB, SQS, SNS, Kinesis, ElastiCache
+CORRECT IMPORT MAPPING:
+- compute: Lambda, EC2, ECS, Batch, ElasticBeanstalk
+- database: RDS, ElastiCache, Redshift
+- network: APIGateway, ALB, NLB, NATGateway, Route53
+- storage: S3, EBS, EFS
+- integration: SQS, SNS, Kinesis (NOT from queue!)
 
 DO NOT IMPORT (use Clusters instead):
-DynamoDB, CloudWatch, CloudTrail, VPC, Subnet, SecurityGroup, RDSProxy, NAT Gateway
+DynamoDB, CloudWatch, CloudTrail, VPC, Subnet, SecurityGroup, RDSProxy, DBProxy
 
 MINIMAL TEMPLATE (modify ONLY variable names):
 import os
@@ -551,15 +556,16 @@ from diagrams import Diagram, Cluster
 from diagrams.aws.compute import Lambda
 from diagrams.aws.database import RDS
 from diagrams.aws.network import APIGateway
+from diagrams.aws.integration import SQS
 
 os.makedirs("output", exist_ok=True)
 
 with Diagram("Title", show=False, filename="output/diagram", direction="TB"):
     api = APIGateway("API")
     func = Lambda("Func")
-    with Cluster("Database"):
-        db = RDS("PostgreSQL")
-    api >> func >> db
+    queue = SQS("Queue")
+    db = RDS("DB")
+    api >> func >> queue >> db
 
 CLUSTER EXAMPLES (Logical groupings):
 - Cluster("VPC - Private Subnet")
@@ -757,6 +763,25 @@ CLUSTER EXAMPLES (Logical groupings):
         # Check for invalid AWS service class names in imports (not in Cluster names)
         import_section = code.split("os.makedirs")[0]  # Before diagram definition
 
+        # Map of invalid/alternative module paths
+        invalid_module_mappings = {
+            "diagrams.aws.queue": "diagrams.aws.integration (for SQS, SNS, Kinesis)",
+            "diagrams.aws.monitoring": "Monitoring should use Clusters, not imports (CloudWatch, CloudTrail, etc.)",
+            "diagrams.aws.security": "Security concepts should use Clusters (SecurityGroup, etc.)",
+            "diagrams.aws.network_management": "Network management should use Clusters (VPC, NAT, etc.)",
+        }
+
+        # Check for imports from invalid modules
+        for invalid_module, correct_module in invalid_module_mappings.items():
+            if f"from {invalid_module}" in import_section:
+                logger.error(f"❌ Invalid module in imports: {invalid_module}")
+                logger.error(f"Correct module: {correct_module}")
+                logger.error(f"Import section:\n{import_section}")
+                raise ValueError(
+                    f"Generated code imports from invalid module '{invalid_module}'. "
+                    f"Use '{correct_module}' instead."
+                )
+
         invalid_import_classes = [
             "SecurityGroup", "Subnet", "VPC", "CloudFlare", "DBProxy", "RDSProxy",
             "DynamoDB", "CloudWatch", "CloudTrail", "NATGateway", "Route53"
@@ -819,6 +844,7 @@ from diagrams import Diagram, Cluster
 from diagrams.aws.network import APIGateway
 from diagrams.aws.compute import Lambda
 from diagrams.aws.database import RDS
+from diagrams.aws.integration import SQS, SNS, Kinesis
 
 os.makedirs("output", exist_ok=True)
 
@@ -827,17 +853,25 @@ with Diagram("Serverless API", show=False, filename="output/serverless", directi
 
     with Cluster("VPC - Private Subnet"):
         func = Lambda("Lambda")
+        queue = SQS("Order Queue")
         with Cluster("Database"):
             db = RDS("PostgreSQL")
 
     with Cluster("DynamoDB Tables"):
         pass  # DynamoDB is a Cluster concept
 
-    api >> func >> db
+    api >> func >> queue >> db
+
+CORRECT MODULE MAPPING:
+- compute: Lambda, EC2, ECS, Batch
+- database: RDS, ElastiCache, Redshift
+- network: APIGateway, ALB, NLB, NATGateway, Route53
+- storage: S3, EBS, EFS
+- integration: SQS, SNS, Kinesis (NOT diagrams.aws.queue!)
 
 RULES:
 1. Return ONLY Python code (no markdown, no explanations)
-2. ONLY import from whitelist: Lambda, APIGateway, RDS, S3, SQS, SNS, Kinesis, EC2, ECS
+2. Import SQS, SNS, Kinesis FROM diagrams.aws.integration (NOT queue)
 3. Never import: DynamoDB, CloudWatch, CloudTrail, VPC, Subnet, SecurityGroup, RDSProxy, NATGateway
 4. Use Clusters for: DynamoDB, Monitoring, VPC, Subnets, Security Groups, NAT Gateway
 5. Visual nodes are ONLY: Lambda, APIGateway, RDS, S3, SQS, SNS, Kinesis, EC2, ECS
