@@ -8,11 +8,12 @@ from typing import Any
 
 from mcp.server import FastMCP
 
-from .models import DiagramMetadata, DiagramType
+from ..domain.models import DiagramMetadata, DiagramType
 from .validator import DiagramValidator
 from .generator import DiagramGenerator
 from .storage import DiagramStorage
 from .config import settings
+from .natural_language import NaturalLanguageProcessor
 
 # Configure logging
 logging.basicConfig(level=getattr(logging, settings.log_level))
@@ -25,6 +26,16 @@ server = FastMCP("cloudforge")
 validator = DiagramValidator()
 generator = DiagramGenerator()
 storage = DiagramStorage()
+
+# Initialize natural language processor (optional - requires GOOGLE_API_KEY)
+try:
+    nl_processor = NaturalLanguageProcessor()
+    nl_enabled = True
+    logger.info("✅ Natural Language Processing enabled")
+except ValueError:
+    nl_processor = None
+    nl_enabled = False
+    logger.warning("⚠️ Natural Language Processing disabled (GOOGLE_API_KEY not set)")
 
 
 @server.tool()
@@ -243,6 +254,81 @@ def delete_diagram(diagram_id: str) -> dict[str, Any]:
         "success": False,
         "message": f"Diagram not found: {diagram_id}",
     }
+
+
+@server.tool()
+def generate_from_description(
+    description: str,
+    diagram_name: str,
+) -> dict[str, Any]:
+    """Generate AWS architecture diagram from natural language description.
+
+    Uses AI agents to:
+    1. Architect: Analyzes text and creates technical blueprint
+    2. Coder: Generates Python code from blueprint
+    3. Generator: Executes code and creates diagram
+
+    Args:
+        description: Natural language description of the architecture
+                    (e.g., "IoT system with Kinesis, Lambda, S3...")
+        diagram_name: Name for the diagram
+
+    Returns:
+        Dictionary with generation result including blueprint and output files
+
+    Requires:
+        GOOGLE_API_KEY environment variable set for Gemini API access
+    """
+    if not nl_enabled:
+        return {
+            "success": False,
+            "message": "Natural Language Processing not available. Set GOOGLE_API_KEY environment variable.",
+        }
+
+    try:
+        logger.info(f"🤖 Processing natural language description: {diagram_name}")
+
+        # Step 1: Process description through AI agents
+        result = nl_processor.process(description, output_filename=diagram_name)
+
+        blueprint_text = result["blueprint"]
+        generated_code = result["code"]
+
+        logger.info(f"📋 Blueprint created:\n{blueprint_text}")
+
+        # Step 2: Generate diagram from code
+        output_files = generator.generate(generated_code, diagram_name, settings.output_formats)
+
+        if not output_files:
+            return {
+                "success": False,
+                "message": "Diagram generation failed after code creation",
+                "blueprint": blueprint_text,
+                "code": generated_code,
+            }
+
+        # Step 3: Format response
+        output_text = f"✅ Diagram generated from description: {diagram_name}\n\n"
+        output_text += "📋 Technical Blueprint:\n"
+        output_text += blueprint_text + "\n"
+        output_text += "Generated formats:\n"
+        for fmt, path in output_files.items():
+            output_text += f"  - {fmt}: {path}\n"
+
+        return {
+            "success": True,
+            "message": output_text,
+            "blueprint": blueprint_text,
+            "code": generated_code,
+            "output_files": output_files,
+        }
+
+    except Exception as e:
+        logger.error(f"❌ Natural language processing failed: {str(e)}")
+        return {
+            "success": False,
+            "message": f"Processing failed: {str(e)}",
+        }
 
 
 def main() -> None:

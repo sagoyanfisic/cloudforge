@@ -1,37 +1,86 @@
 version: '3.8'
 
 services:
-  aws-diagram-mcp:
+  # MCP Server - Core service (no healthcheck)
+  mcp-server:
     build:
       context: .
       dockerfile: Dockerfile
-      args:
-        BUILDKIT_INLINE_CACHE: 1
     container_name: aws-diagram-mcp-server
     environment:
-      AWS_DIAGRAM_DIAGRAMS_STORAGE_PATH: /data/diagrams
-      AWS_DIAGRAM_MAX_DIAGRAM_SIZE_MB: 50
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY}
+      AWS_DIAGRAM_LOG_LEVEL: ${AWS_DIAGRAM_LOG_LEVEL:-INFO}
       AWS_DIAGRAM_OUTPUT_FORMATS: png,pdf,svg
       AWS_DIAGRAM_MAX_COMPONENTS: 100
       AWS_DIAGRAM_MAX_RELATIONSHIPS: 200
-      AWS_DIAGRAM_LOG_LEVEL: INFO
+      AWS_DIAGRAM_DIAGRAMS_STORAGE_PATH: /app/diagrams
       PYTHONUNBUFFERED: 1
     volumes:
-      - diagrams_data:/data/diagrams
-    restart: unless-stopped
+      - diagrams_data:/app/diagrams
     networks:
       - aws-diagram-network
-    healthcheck:
-      test: ["CMD", "python", "-c", "import src.server"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+    restart: unless-stopped
 
-volumes:
-  diagrams_data:
-    driver: local
+  # FastAPI Server
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: aws-diagram-api
+    command: uvicorn src.presentation.api:app --host 0.0.0.0 --port 8000 --reload
+    environment:
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY}
+      AWS_DIAGRAM_LOG_LEVEL: ${AWS_DIAGRAM_LOG_LEVEL:-INFO}
+      AWS_DIAGRAM_OUTPUT_FORMATS: png,pdf,svg
+      AWS_DIAGRAM_MAX_COMPONENTS: 100
+      AWS_DIAGRAM_MAX_RELATIONSHIPS: 200
+      AWS_DIAGRAM_DIAGRAMS_STORAGE_PATH: /app/diagrams
+      PYTHONUNBUFFERED: 1
+    ports:
+      - "8000:8000"
+    volumes:
+      - diagrams_data:/app/diagrams
+      - .:/app
+    networks:
+      - aws-diagram-network
+    depends_on:
+      - mcp-server
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
+
+  # Streamlit UI
+  ui:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: aws-diagram-ui
+    command: streamlit run ui/app.py --server.port 8501 --server.address 0.0.0.0
+    environment:
+      CLOUDFORGE_API_URL: http://api:8000
+      STREAMLIT_SERVER_HEADLESS: true
+      STREAMLIT_LOGGER_LEVEL: info
+      PYTHONUNBUFFERED: 1
+    ports:
+      - "8501:8501"
+    volumes:
+      - diagrams_data:/app/diagrams
+      - .:/app
+    networks:
+      - aws-diagram-network
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
 
 networks:
   aws-diagram-network:
     driver: bridge
+
+volumes:
+  diagrams_data:
+    driver: local
