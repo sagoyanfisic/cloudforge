@@ -7,9 +7,11 @@ Replaces manual Gemini calls with LangChain chains featuring:
 - Observability via LangSmith
 """
 
+import os
 import logging
 from typing import Optional, Any
 from datetime import datetime
+from dotenv import load_dotenv
 
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
@@ -18,6 +20,9 @@ from langchain_core.runnables import RunnablePassthrough, RunnableLambda
 from pydantic import BaseModel, Field
 
 from ..domain.models import DiagramValidation, ValidationError
+
+# Load .env file
+load_dotenv()
 
 logger = logging.getLogger(__name__)
 
@@ -70,8 +75,20 @@ class BlueprintArchitectChain:
         """Initialize blueprint architect chain
 
         Args:
-            api_key: Google API key
+            api_key: Google API key (if None, uses GOOGLE_API_KEY env var)
         """
+        # Get API key from parameter or environment
+        if api_key is None:
+            api_key = os.getenv("GOOGLE_API_KEY")
+
+        if not api_key:
+            raise ValueError(
+                "GOOGLE_API_KEY not set. Provide it via:\n"
+                "  - api_key parameter\n"
+                "  - GOOGLE_API_KEY environment variable\n"
+                "  - .env file with GOOGLE_API_KEY=your_key"
+            )
+
         self.llm = ChatGoogleGenerativeAI(
             model="gemini-2.5-flash",
             google_api_key=api_key,
@@ -160,8 +177,20 @@ class DiagramCoderChain:
         """Initialize diagram coder chain
 
         Args:
-            api_key: Google API key
+            api_key: Google API key (if None, uses GOOGLE_API_KEY env var)
         """
+        # Get API key from parameter or environment
+        if api_key is None:
+            api_key = os.getenv("GOOGLE_API_KEY")
+
+        if not api_key:
+            raise ValueError(
+                "GOOGLE_API_KEY not set. Provide it via:\n"
+                "  - api_key parameter\n"
+                "  - GOOGLE_API_KEY environment variable\n"
+                "  - .env file with GOOGLE_API_KEY=your_key"
+            )
+
         self.llm = ChatGoogleGenerativeAI(
             model="gemini-2.5-flash",
             google_api_key=api_key,

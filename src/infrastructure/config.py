@@ -6,6 +6,10 @@ from pathlib import Path
 from typing import Optional
 from pydantic import Field, ConfigDict
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from dotenv import load_dotenv
+
+# Load .env file
+load_dotenv()
 
 
 class Settings(BaseSettings):
