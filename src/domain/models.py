@@ -111,7 +111,7 @@ class DiagramRequest(BaseModel):
 
     code: str = Field(..., description="Python code to generate the diagram")
     metadata: DiagramMetadata
-    validate: bool = Field(default=True, description="Validate before generating")
+    validate_code: bool = Field(default=True, description="Validate before generating")
 
 
 class DiagramResponse(BaseModel):

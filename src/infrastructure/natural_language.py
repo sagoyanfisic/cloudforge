@@ -462,11 +462,25 @@ class DiagramCoder:
 
     SYSTEM_PROMPT = """You are CloudForge-Core. Your goal is to generate executable Python code using the `diagrams` library based EXACTLY on the provided Blueprint.
 
+### VALID AWS SERVICE CLASSES (Use ONLY these)
+**Compute:** EC2, Lambda, ECS, ElasticBeanstalk, AutoScaling, Batch
+**Database:** RDS, DynamoDB, ElastiCache, DAX, Redshift, DocumentDB, AppSync
+**Network:** APIGateway, ALB, NLB, ELB, Route53, CloudFront, VPC, NATGateway, VPCEndpoint, DirectConnect, VPN
+**Storage:** S3, EBS, EFS, Glacier, StorageGateway, FSx
+**Integration:** SQS, SNS, SES, SQS, Kinesis, KinesisFirehose, AppIntegrationService
+**Analytics:** Athena, EMR, Redshift, QuickSight, DataPipeline, Glue
+**Management:** CloudWatch, CloudTrail, SystemsManager, CloudFormation
+**Security:** IAM, KMS, SecretsManager, Shield, WAF, GuardDuty
+
+DO NOT use: SecurityGroup (not a visual class), Subnet, CloudFlare, custom classes, or AWS::* notation
+
 ### CRITICAL RULES
 1. **Output:** Return ONLY raw Python code. Do NOT use Markdown blocks (```).
-2. **Imports:** Use specific sub-modules (e.g., `from diagrams.aws.compute import EC2`).
+2. **Imports:** Use ONLY valid class names from list above. Import from correct sub-modules.
 3. **Setup:** ALWAYS import `os` and run `os.makedirs("output", exist_ok=True)`.
 4. **Diagram:** Use `with Diagram(..., show=False, filename="output/...", direction="TB"):`.
+5. **Nodes:** Map each Blueprint node to a valid AWS class. If unclear, use closest match and note it.
+6. **NO Abstract Concepts:** Don't use SecurityGroup, Subnet, or VPC as visible nodes (they're logical).
 
 ### REFERENCE TEMPLATE (MIMIC THIS CODING STYLE)
 import os
@@ -538,9 +552,13 @@ Convert the User's Blueprint into Python code following the Reference Template a
         blueprint_text = str(blueprint)
         logger.debug(f"Blueprint input:\n{blueprint_text}")
 
+        # Detect if blueprint mentions serverless components
+        is_serverless = any(term in blueprint_text.lower() for term in ["lambda", "api gateway", "dynamodb", "rds proxy"])
+        system_prompt = self._get_serverless_coder_prompt() if is_serverless else self.SYSTEM_PROMPT
+
         try:
             response = self.model.generate_content(
-                [self.SYSTEM_PROMPT, f"\nBlueprint:\n{blueprint_text}"],
+                [system_prompt, f"\nBlueprint:\n{blueprint_text}"],
                 generation_config=genai.types.GenerationConfig(
                     temperature=0.1,  # Very low for code precision
                     max_output_tokens=3000,
@@ -567,15 +585,27 @@ Convert the User's Blueprint into Python code following the Reference Template a
             raise
 
     def _validate_code_syntax(self, code: str, blueprint_text: str) -> None:
-        """Validate Python code syntax.
+        """Validate Python code syntax and diagrams imports.
 
         Args:
             code: Generated Python code to validate
             blueprint_text: Original blueprint for debugging
 
         Raises:
-            ValueError: If code has syntax errors
+            ValueError: If code has syntax errors or invalid imports
         """
+        # Check for invalid AWS service class names
+        invalid_classes = ["SecurityGroup", "Subnet", "VPC", "CloudFlare", "DBProxy"]
+        for invalid_class in invalid_classes:
+            if invalid_class in code:
+                logger.error(f"❌ Invalid class used: {invalid_class} (not a valid diagrams.aws class)")
+                logger.error(f"Code snippet:\n{code[:500]}")
+                raise ValueError(
+                    f"Generated code uses invalid class '{invalid_class}'. "
+                    f"Valid classes: EC2, Lambda, RDS, DynamoDB, S3, ALB, etc. "
+                    f"Abstract concepts like SecurityGroup or Subnet cannot be visual nodes."
+                )
+
         try:
             ast.parse(code)
         except SyntaxError as e:
@@ -587,6 +617,65 @@ Convert the User's Blueprint into Python code following the Reference Template a
                 f"Generated code has syntax error at line {e.lineno}: {e.msg}. "
                 "This may indicate the AI model needs a better prompt. Check logs for details."
             )
+
+    def _get_serverless_coder_prompt(self) -> str:
+        """Get specialized code generation prompt for serverless architectures.
+
+        Returns:
+            str: Gemini system prompt for serverless diagrams
+        """
+        return """You are CloudForge-Serverless Coder. Generate Python diagrams code for Serverless architectures.
+
+VALID CLASSES FOR SERVERLESS:
+- **Compute:** Lambda
+- **API:** APIGateway
+- **Database:** RDS, DynamoDB
+- **Connection:** Use RDS for connection pooling concept (NOT RDSProxy - doesn't exist in diagrams)
+- **Network:** NATGateway, VPC (for Clusters only, not nodes)
+- **Monitoring:** CloudWatch, CloudTrail
+- **Storage:** S3
+
+SERVERLESS PATTERNS:
+1. API Gateway → Lambda → DynamoDB (direct)
+2. API Gateway → Lambda → RDS (represents database)
+3. Lambda → CloudWatch (logging)
+4. Include NAT Gateway for external calls
+
+DO NOT USE: SecurityGroup, Subnet, RDSProxy, CloudFlare, abstract concepts
+ONLY: Visual AWS services from the list above
+
+TEMPLATE FOR SERVERLESS:
+import os
+from diagrams import Diagram, Cluster
+from diagrams.aws.network import APIGateway, NATGateway
+from diagrams.aws.compute import Lambda
+from diagrams.aws.database import RDS, DynamoDB
+from diagrams.aws.management import CloudWatch, CloudTrail
+
+os.makedirs("output", exist_ok=True)
+
+with Diagram("Serverless Architecture", show=False, filename="output/serverless", direction="TB"):
+    api = APIGateway("REST API")
+
+    with Cluster("Compute"):
+        func = Lambda("Lambda Functions")
+
+    db_nosql = DynamoDB("NoSQL Data")
+    db_sql = RDS("SQL Database")
+    monitor = CloudWatch("Monitoring")
+
+    api >> func >> db_nosql
+    func >> db_sql
+    func >> monitor
+
+RULES:
+1. Return ONLY Python code (no markdown blocks)
+2. Import correct classes from diagrams.aws.*
+3. Map Blueprint nodes to visual classes
+4. Use Clusters for logical groupings (VPC, Subnets, etc.)
+5. RDS/DynamoDB are separate nodes (connection pooling is implicit)
+6. Never output abstract concepts as nodes
+"""
 
 
 class NaturalLanguageProcessor:
