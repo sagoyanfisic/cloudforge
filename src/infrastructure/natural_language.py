@@ -180,12 +180,21 @@ Metadata:
         ---BEGIN_BLUEPRINT---
         Title: [name]
         Description: [desc]
+
         Nodes:
-        - [Service Name] as [var_name] (Type: [ServiceType])
+        - [Display Name] | ID: [var_name] | Type: [Class] | Category: [module_name]
+
         Clusters:
-        - [Cluster Name] contains [var1, var2, ...]
+        - Cluster: [Display Name]
+          Type: [Logical/VPC/Subnet]
+          Members: [var1, var2, ...]
+
         Relationships:
         - [source_var] >> [dest_var]
+
+        Metadata:
+        - Inferred_Decisions: [...]
+        - Security_Risk: [Low/Medium/High]
         ---END_BLUEPRINT---
 
         Args:
@@ -220,9 +229,12 @@ Metadata:
 
         current_section = None
         lines = blueprint_content.split("\n")
+        i = 0
 
-        for line in lines:
-            line = line.strip()
+        while i < len(lines):
+            line = lines[i].strip()
+            i += 1
+
             if not line:
                 continue
 
@@ -236,45 +248,70 @@ Metadata:
                 current_section = "clusters"
             elif line == "Relationships:":
                 current_section = "relationships"
-            elif line.startswith("-") and current_section:
+            elif line == "Metadata:":
+                current_section = "metadata"
+            elif line.startswith("-") and current_section == "nodes":
+                # Parse: [Display Name] | ID: [var_name] | Type: [Class] | Category: [module_name]
                 content = line[1:].strip()
+                parts = [p.strip() for p in content.split("|")]
 
-                if current_section == "nodes":
-                    # Parse: [Service Name] as [var_name] (Type: [ServiceType])
-                    match = re.search(
-                        r"^(.+?)\s+as\s+(\w+)\s+\(Type:\s+(.+?)\)$", content
-                    )
-                    if match:
+                if len(parts) >= 3:
+                    name = parts[0]
+                    var_id = ""
+                    service_type = ""
+
+                    for part in parts[1:]:
+                        if part.startswith("ID:"):
+                            var_id = part[3:].strip()
+                        elif part.startswith("Type:"):
+                            service_type = part[5:].strip()
+
+                    if var_id and service_type:
                         blueprint_dict["nodes"].append(
                             {
-                                "name": match.group(1),
-                                "variable": match.group(2),
-                                "service_type": match.group(3),
+                                "name": name,
+                                "variable": var_id,
+                                "service_type": service_type,
                                 "region": None,
                             }
                         )
 
-                elif current_section == "clusters":
-                    # Parse: [Cluster Name] contains [var1, var2, ...]
-                    match = re.search(r"^(.+?)\s+contains\s+(.+)$", content)
-                    if match:
-                        vars_str = match.group(2)
-                        vars_list = [v.strip() for v in vars_str.split(",")]
-                        blueprint_dict["clusters"].append(
-                            {"name": match.group(1), "nodes": vars_list}
-                        )
+            elif line.startswith("Cluster:") and current_section == "clusters":
+                # Parse cluster definition
+                cluster_name = line[8:].strip()
+                cluster_type = ""
+                cluster_members = []
 
-                elif current_section == "relationships":
-                    # Parse: [source_var] >> [dest_var]
-                    match = re.search(r"^(\w+)\s*>>\s*(\w+)$", content)
-                    if match:
-                        blueprint_dict["relationships"].append(
-                            {
-                                "source": match.group(1),
-                                "destination": match.group(2),
-                                "connection_type": "default",
-                            }
-                        )
+                # Look ahead for Type and Members
+                while i < len(lines):
+                    next_line = lines[i].strip()
+                    if not next_line or next_line.startswith("-"):
+                        break
+
+                    if next_line.startswith("Type:"):
+                        cluster_type = next_line[5:].strip()
+                    elif next_line.startswith("Members:"):
+                        members_str = next_line[8:].strip()
+                        cluster_members = [m.strip() for m in members_str.split(",")]
+
+                    i += 1
+
+                blueprint_dict["clusters"].append(
+                    {"name": cluster_name, "nodes": cluster_members}
+                )
+
+            elif line.startswith("-") and current_section == "relationships":
+                # Parse: [source_var] >> [dest_var]
+                content = line[1:].strip()
+                match = re.search(r"^(\w+)\s*>>\s*(\w+)$", content)
+                if match:
+                    blueprint_dict["relationships"].append(
+                        {
+                            "source": match.group(1),
+                            "destination": match.group(2),
+                            "connection_type": "default",
+                        }
+                    )
 
         return blueprint_dict
 
