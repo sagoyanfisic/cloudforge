@@ -161,7 +161,7 @@ COMMON PATTERNS:
                 [system_prompt, f"\nUser input:\n{raw_text}"],
                 generation_config=genai.types.GenerationConfig(
                     temperature=0.2,  # Low for analytical thinking
-                    max_output_tokens=2000,
+                    max_output_tokens=4000,  # Increased from 2000 to avoid truncation
                 ),
             )
 
@@ -175,6 +175,11 @@ COMMON PATTERNS:
                 logger.error(f"❌ Parse error: {str(parse_error)}")
                 logger.error(f"Full response received:\n{blueprint_text[:1000]}")
                 raise ValueError(f"Blueprint format invalid. Got: {blueprint_text[:200]}...") from parse_error
+
+            # If no nodes were parsed, this might be a truncated response
+            if not blueprint_dict.get("nodes"):
+                logger.warning(f"⚠️ No nodes parsed from blueprint. Response may be incomplete.")
+                logger.warning(f"Blueprint text (first 500 chars):\n{blueprint_text[:500]}")
 
             blueprint = ArchitectureBlueprint(**blueprint_dict)
 
@@ -225,24 +230,32 @@ COMMON PATTERNS:
         start_idx = text.find(start_marker)
         end_idx = text.find(end_marker)
 
-        if start_idx == -1 or end_idx == -1:
-            # Try alternative markers
-            start_marker_alt = "BEGIN_BLUEPRINT"
-            end_marker_alt = "END_BLUEPRINT"
-            start_idx = text.find(start_marker_alt)
-            end_idx = text.find(end_marker_alt)
+        # If start found but end not found, use end of text (response was truncated)
+        if start_idx != -1 and end_idx == -1:
+            logger.warning("⚠️ END_BLUEPRINT marker not found - response may be truncated, using end of text")
+            end_idx = len(text)
 
-            if start_idx == -1 or end_idx == -1:
-                raise ValueError(f"Blueprint markers not found. Looked for '---BEGIN_BLUEPRINT---' or 'BEGIN_BLUEPRINT'")
+        # Try alternative markers if primary not found
+        if start_idx == -1:
+            start_marker = "BEGIN_BLUEPRINT"
+            start_idx = text.find(start_marker)
+
+        if end_idx == -1 or (start_idx == -1):
+            # Try with just the alternative marker
+            if start_idx == -1:
+                raise ValueError(f"Blueprint start marker not found in response")
+            if end_idx == -1:
+                logger.warning("⚠️ Using end of text as response may be incomplete")
+                end_idx = len(text)
 
         # Calculate proper marker length
-        marker_len = len(start_marker) if text[start_idx:start_idx+len(start_marker)] == start_marker else len(start_marker_alt)
+        marker_len = len("---BEGIN_BLUEPRINT---") if "---BEGIN_BLUEPRINT---" in text[max(0, start_idx-10):start_idx+30] else len("BEGIN_BLUEPRINT")
         blueprint_content = text[start_idx + marker_len : end_idx].strip()
 
         # Parse sections
         blueprint_dict = {
-            "title": "",
-            "description": "",
+            "title": "Generated Architecture",
+            "description": "Architecture blueprint from natural language",
             "nodes": [],
             "clusters": [],
             "relationships": [],
@@ -251,6 +264,9 @@ COMMON PATTERNS:
         current_section = None
         lines = blueprint_content.split("\n")
         i = 0
+
+        # Track if we successfully parsed at least some content
+        parsed_any_content = False
 
         while i < len(lines):
             line = lines[i].strip()
@@ -261,8 +277,10 @@ COMMON PATTERNS:
 
             if line.startswith("Title:"):
                 blueprint_dict["title"] = line[6:].strip()
+                parsed_any_content = True
             elif line.startswith("Description:"):
                 blueprint_dict["description"] = line[12:].strip()
+                parsed_any_content = True
             elif line == "Nodes:":
                 current_section = "nodes"
             elif line == "Clusters:":
@@ -333,6 +351,10 @@ COMMON PATTERNS:
                             "connection_type": "default",
                         }
                     )
+                    parsed_any_content = True
+
+        # Log what we successfully parsed
+        logger.info(f"✅ Parsed blueprint: Title='{blueprint_dict['title']}', Nodes={len(blueprint_dict['nodes'])}, Clusters={len(blueprint_dict['clusters'])}, Relationships={len(blueprint_dict['relationships'])}")
 
         return blueprint_dict
 
