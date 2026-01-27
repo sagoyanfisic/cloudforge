@@ -121,6 +121,46 @@ Metadata:
 - Inferred_Decisions: [List specific choices made by you, e.g., "Chose RDS for generic SQL request"]
 - Security_Risk: [Low/Medium/High]
 ---END_BLUEPRINT---
+
+### FEW-SHOT EXAMPLE (Learn from this)
+
+**User Input:**
+"I need a highly available web app. Users hit CloudFront, which goes to an ALB. The ALB balances traffic to an ECS Service running Fargate. The app caches data in ElastiCache Redis and persists to Aurora."
+
+**Your Output:**
+---BEGIN_BLUEPRINT---
+Title: High Availability Web App
+Description: Scalable web architecture with caching and SQL persistence.
+
+Nodes:
+- CloudFront CDN | ID: cdn | Type: CloudFront | Category: network
+- Load Balancer | ID: alb | Type: ALB | Category: network
+- Web Service | ID: web_svc | Type: ECS | Category: compute
+- Redis Cache | ID: redis | Type: ElastiCache | Category: database
+- Primary DB | ID: aurora | Type: RDS | Category: database
+
+Clusters:
+- Cluster: Application Tier
+  Type: Logical
+  Members: [web_svc, redis]
+
+Relationships:
+- cdn >> alb
+- alb >> web_svc
+- web_svc >> redis
+- web_svc >> aurora
+
+Metadata:
+- Inferred_Decisions: ["Selected ECS Fargate for container request", "Assumed RDS for Aurora class"]
+- Security_Risk: Low
+---END_BLUEPRINT---
+
+### CRITICAL INSTRUCTIONS
+1. Always output ONLY the blueprint content between ---BEGIN_BLUEPRINT--- and ---END_BLUEPRINT--- tags.
+2. Do NOT add any intro, outro, explanation, or markdown formatting outside the tags.
+3. Ensure all node IDs are lowercase, snake_case Python variable names.
+4. Include Metadata with specific Inferred_Decisions explaining your architectural choices.
+5. Assess Security_Risk based on exposure level and data sensitivity.
 """
 
     def __init__(self, api_key: Optional[str] = None):
