@@ -1,72 +1,39 @@
-# Git
-.git
-.gitignore
-.gitattributes
-
-# Python
 __pycache__
 *.pyc
 *.pyo
 *.pyd
 .Python
-*.egg-info
-.eggs
-dist
-build
-*.egg
-.pytest_cache
-.coverage
-htmlcov
-*.cover
-
-# Virtual environments
-venv/
 env/
-ENV/
+venv/
 .venv
-
-# IDEs
-.vscode
-.idea
-*.swp
-*.swo
-*~
-.DS_Store
-*.iml
-
-# Documentation
-docs/
-*.md
-!CLOUDFORGE.md
-!README.md
-
-# CI/CD
-.github
-.gitlab-ci.yml
-.travis.yml
-
-# Docker
-docker-compose.yml
-.dockerignore
-Dockerfile
-
-# Development
 .env
 .env.local
 .env.*.local
-Makefile
-.editorconfig
-
-# OS
+.git
+.gitignore
+.github
+*.md
+!README.md
+.pytest_cache
+.mypy_cache
+.coverage
+htmlcov
+dist
+build
+*.egg-info
 .DS_Store
-Thumbs.db
-*.log
-
-# Node (if any)
-node_modules/
+node_modules
 npm-debug.log
-
-# Misc
-.cache
-.tmp
-*.bak
+.editorconfig
+.gitkeep
+*.log
+*.swp
+*.swo
+*~
+.idea
+.vscode
+*.iml
+.ruby-version
+.ruby-gemset
+Procfile
+docker-compose.override.yml

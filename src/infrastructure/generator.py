@@ -72,12 +72,35 @@ class DiagramGenerator:
             raise
 
     def _inject_output_config(self, code: str, diagram_name: str) -> str:
-        """Inject output directory configuration into the code"""
-        # Modify the Diagram context manager to use our temp directory
-        modified_code = code.replace(
-            'with Diagram("',
-            f'with Diagram("{diagram_name}", filename="{self.temp_dir / diagram_name}", show=False',
-        )
+        """Inject output directory configuration into the code
+
+        Replaces the filename parameter in the Diagram context manager with the
+        proper temporary directory path.
+        """
+        import re
+
+        # Pattern to match: with Diagram(..., filename="...", show=...)
+        # We need to replace filename parameter while keeping other parameters
+        pattern = r'(with\s+Diagram\s*\([^)]*filename\s*=\s*)"[^"]*"'
+
+        replacement = f'\\1"{self.temp_dir / diagram_name}"'
+
+        modified_code = re.sub(pattern, replacement, code, count=1)
+
+        # Also ensure show=False is set
+        if 'show=False' not in modified_code:
+            # If show parameter is missing, add it
+            pattern = r'(with\s+Diagram\s*\([^)]*)'
+            if 'direction=' in modified_code:
+                # If direction is specified, add show=False before it
+                pattern = r'(direction\s*=\s*)'
+                modified_code = re.sub(pattern, r'show=False, \1', modified_code, count=1)
+            else:
+                # Otherwise add it at the end before the closing paren
+                pattern = r'(\):\s*$)'
+                modified_code = re.sub(pattern, r', show=False\1', modified_code, count=1, flags=re.MULTILINE)
+
+        logger.debug(f"Modified code filename parameter to: {self.temp_dir / diagram_name}")
         return modified_code
 
     def cleanup(self, diagram_name: str) -> None:

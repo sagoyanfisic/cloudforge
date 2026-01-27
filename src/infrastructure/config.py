@@ -1,19 +1,28 @@
 """Configuration settings for AWS Diagram MCP Server"""
 
+import os
+import json
 from pathlib import Path
 from typing import Optional
-from pydantic_settings import BaseSettings
+from pydantic import Field, ConfigDict
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     """Application settings"""
 
+    model_config = SettingsConfigDict(
+        env_prefix="AWS_DIAGRAM_",
+        case_sensitive=False,
+        extra="ignore",  # Ignore extra environment variables
+    )
+
     # Storage settings
     diagrams_storage_path: Path = Path.home() / ".aws_diagrams"
     max_diagram_size_mb: int = 50
 
-    # Output formats
-    output_formats: list[str] = ["png", "pdf", "svg"]
+    # Output formats - simple string, NOT parsed as JSON
+    output_formats: str = "png,pdf,svg"
 
     # Validation settings
     enable_validation: bool = True
@@ -23,12 +32,11 @@ class Settings(BaseSettings):
     # Logging
     log_level: str = "INFO"
 
-    class Config:
-        env_prefix = "AWS_DIAGRAM_"
-        case_sensitive = False
-
     def __init__(self, **data: dict) -> None:
         super().__init__(**data)
+        # Convert string output_formats to list
+        if isinstance(self.output_formats, str):
+            self.output_formats = [fmt.strip() for fmt in self.output_formats.split(",")]
         # Create storage directory if it doesn't exist
         self.diagrams_storage_path.mkdir(parents=True, exist_ok=True)
 

@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
-from .models import StoredDiagram, DiagramMetadata
+from ..domain.models import StoredDiagram, DiagramMetadata
 from .config import settings
 
 

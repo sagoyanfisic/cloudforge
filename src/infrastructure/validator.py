@@ -3,7 +3,7 @@
 import ast
 import re
 from typing import Any
-from .models import ValidationError, DiagramValidation
+from ..domain.models import ValidationError, DiagramValidation
 from .config import settings
 
 
