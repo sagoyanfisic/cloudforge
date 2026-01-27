@@ -207,6 +207,8 @@ CRITICAL RULES:
 2. EVERY opening parenthesis MUST have matching closing parenthesis
 3. Return ONLY valid Python code (no explanations, no markdown)
 4. All imports MUST be from correct modules
+5. IMPORTANT: Connections (>>) are ONLY between individual nodes, NEVER between Clusters
+6. Nodes inside a Cluster are indented under "with Cluster(...):"
 
 CORRECT IMPORT MAPPING:
 - compute: Lambda, EC2, ECS, Batch
@@ -218,10 +220,10 @@ CORRECT IMPORT MAPPING:
 VALID CLASSES TO IMPORT:
 Lambda, EC2, ECS, RDS, S3, APIGateway, ALB, NLB, SQS, SNS, Kinesis, ElastiCache, NATGateway
 
-DO NOT IMPORT (use Clusters instead):
-DynamoDB, CloudWatch, CloudTrail, VPC, Subnet, SecurityGroup, RDSProxy
+DO NOT IMPORT - Use as Cluster labels instead:
+DynamoDB, CloudWatch, CloudTrail, VPC, Subnet, SecurityGroup, RDSProxy, DynamoDB
 
-TEMPLATE:
+TEMPLATE WITH CLUSTER:
 import os
 from diagrams import Diagram, Cluster
 from diagrams.aws.compute import Lambda
@@ -231,10 +233,20 @@ from diagrams.aws.database import RDS
 os.makedirs("output", exist_ok=True)
 
 with Diagram("Title", show=False, filename="output/diagram", direction="TB"):
-    api = APIGateway("API")
-    func = Lambda("Function")
-    db = RDS("Database")
+    api = APIGateway("API Gateway")
+
+    with Cluster("Backend Services"):
+        func = Lambda("Function")
+        db = RDS("Database")
+
     api >> func >> db
+
+KEY POINTS:
+- Nodes inside Clusters are created with "with Cluster(...):" indentation
+- Connections are between individual nodes (api, func, db)
+- Never do: cluster1 >> cluster2 (WRONG!)
+- Always do: node1 >> node2 (inside or across clusters) (CORRECT!)
+- If service not in imports (like DynamoDB), represent it as: with Cluster("DynamoDB"): with no nodes inside
 """
 
     def invoke(self, blueprint: dict[str, Any]) -> str:
