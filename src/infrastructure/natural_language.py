@@ -85,21 +85,82 @@ class BlueprintArchitect:
     - Create technical blueprint
     """
 
-    SYSTEM_PROMPT = """You are the CloudForge Blueprint Architect.
-GOAL: Analyze unstructured text and output a STRICT TECHNICAL BLUEPRINT.
+    SYSTEM_PROMPT = """You are the CloudForge Blueprint Architect, an expert solution architect specializing in AWS and the Python `diagrams` library.
 
-INPUT: Raw text describing infrastructure.
+GOAL: Transform natural language architectural descriptions into a STRICT, PARSEABLE BLUEPRINT. Your output acts as the instruction set for a code generator.
 
-OUTPUT FORMAT (Do not add chat):
+ANALYSIS PROTOCOL:
+1. Scan for Services: Map user requests to specific AWS Service Classes in the `diagrams` library (e.g., "Serverless DB" -> Dynamodb or Aurora).
+2. Determine Category: Identify the library module (compute, database, network, storage, integration, analytics).
+3. Structure: Group related nodes into logical Clusters (VPC, Subnets, Autoscaling Groups).
+4. Flow: Define directional relationships (>>) representing data or traffic flow.
+
+RULES:
+1. Valid Classes: Use ONLY valid class names from `diagrams.aws`.
+2. Python-Safe IDs: All unique_ids must be lowercase, snake_case, and valid Python variable names (e.g., user_db, not User DB).
+3. Inference: If the input is vague (e.g., "a database"), infer the industry standard for the context (e.g., RDS for relational, DynamoDB for high scale) and note it in Metadata.
+4. Security: Mark public-facing databases as High Risk in Metadata.
+
+OUTPUT FORMAT (STRICT TEMPLATE - do not add intro/outro text):
 ---BEGIN_BLUEPRINT---
-Title: [Short Name]
+Title: [Project Name]
+Description: [Brief summary]
+
 Nodes:
-- [Service Name] as [var_name] (Type: [Specific AWS Service Class])
+- [Display Name] | ID: [var_name] | Type: [Class] | Category: [module_name]
+
 Clusters:
-- [Cluster Name] contains [list_of_vars]
+- Cluster: [Display Name]
+  Type: [Logical/VPC/Subnet]
+  Members: [list_of_var_names]
+
 Relationships:
 - [source_var] >> [dest_var]
+
+Metadata:
+- Inferred_Decisions: [List specific choices made by you, e.g., "Chose RDS for generic SQL request"]
+- Security_Risk: [Low/Medium/High]
 ---END_BLUEPRINT---
+
+### FEW-SHOT EXAMPLE (Learn from this)
+
+**User Input:**
+"I need a highly available web app. Users hit CloudFront, which goes to an ALB. The ALB balances traffic to an ECS Service running Fargate. The app caches data in ElastiCache Redis and persists to Aurora."
+
+**Your Output:**
+---BEGIN_BLUEPRINT---
+Title: High Availability Web App
+Description: Scalable web architecture with caching and SQL persistence.
+
+Nodes:
+- CloudFront CDN | ID: cdn | Type: CloudFront | Category: network
+- Load Balancer | ID: alb | Type: ALB | Category: network
+- Web Service | ID: web_svc | Type: ECS | Category: compute
+- Redis Cache | ID: redis | Type: ElastiCache | Category: database
+- Primary DB | ID: aurora | Type: RDS | Category: database
+
+Clusters:
+- Cluster: Application Tier
+  Type: Logical
+  Members: [web_svc, redis]
+
+Relationships:
+- cdn >> alb
+- alb >> web_svc
+- web_svc >> redis
+- web_svc >> aurora
+
+Metadata:
+- Inferred_Decisions: ["Selected ECS Fargate for container request", "Assumed RDS for Aurora class"]
+- Security_Risk: Low
+---END_BLUEPRINT---
+
+### CRITICAL INSTRUCTIONS
+1. Always output ONLY the blueprint content between ---BEGIN_BLUEPRINT--- and ---END_BLUEPRINT--- tags.
+2. Do NOT add any intro, outro, explanation, or markdown formatting outside the tags.
+3. Ensure all node IDs are lowercase, snake_case Python variable names.
+4. Include Metadata with specific Inferred_Decisions explaining your architectural choices.
+5. Assess Security_Risk based on exposure level and data sensitivity.
 """
 
     def __init__(self, api_key: Optional[str] = None):
@@ -159,12 +220,21 @@ Relationships:
         ---BEGIN_BLUEPRINT---
         Title: [name]
         Description: [desc]
+
         Nodes:
-        - [Service Name] as [var_name] (Type: [ServiceType])
+        - [Display Name] | ID: [var_name] | Type: [Class] | Category: [module_name]
+
         Clusters:
-        - [Cluster Name] contains [var1, var2, ...]
+        - Cluster: [Display Name]
+          Type: [Logical/VPC/Subnet]
+          Members: [var1, var2, ...]
+
         Relationships:
         - [source_var] >> [dest_var]
+
+        Metadata:
+        - Inferred_Decisions: [...]
+        - Security_Risk: [Low/Medium/High]
         ---END_BLUEPRINT---
 
         Args:
@@ -199,9 +269,12 @@ Relationships:
 
         current_section = None
         lines = blueprint_content.split("\n")
+        i = 0
 
-        for line in lines:
-            line = line.strip()
+        while i < len(lines):
+            line = lines[i].strip()
+            i += 1
+
             if not line:
                 continue
 
@@ -215,45 +288,70 @@ Relationships:
                 current_section = "clusters"
             elif line == "Relationships:":
                 current_section = "relationships"
-            elif line.startswith("-") and current_section:
+            elif line == "Metadata:":
+                current_section = "metadata"
+            elif line.startswith("-") and current_section == "nodes":
+                # Parse: [Display Name] | ID: [var_name] | Type: [Class] | Category: [module_name]
                 content = line[1:].strip()
+                parts = [p.strip() for p in content.split("|")]
 
-                if current_section == "nodes":
-                    # Parse: [Service Name] as [var_name] (Type: [ServiceType])
-                    match = re.search(
-                        r"^(.+?)\s+as\s+(\w+)\s+\(Type:\s+(.+?)\)$", content
-                    )
-                    if match:
+                if len(parts) >= 3:
+                    name = parts[0]
+                    var_id = ""
+                    service_type = ""
+
+                    for part in parts[1:]:
+                        if part.startswith("ID:"):
+                            var_id = part[3:].strip()
+                        elif part.startswith("Type:"):
+                            service_type = part[5:].strip()
+
+                    if var_id and service_type:
                         blueprint_dict["nodes"].append(
                             {
-                                "name": match.group(1),
-                                "variable": match.group(2),
-                                "service_type": match.group(3),
+                                "name": name,
+                                "variable": var_id,
+                                "service_type": service_type,
                                 "region": None,
                             }
                         )
 
-                elif current_section == "clusters":
-                    # Parse: [Cluster Name] contains [var1, var2, ...]
-                    match = re.search(r"^(.+?)\s+contains\s+(.+)$", content)
-                    if match:
-                        vars_str = match.group(2)
-                        vars_list = [v.strip() for v in vars_str.split(",")]
-                        blueprint_dict["clusters"].append(
-                            {"name": match.group(1), "nodes": vars_list}
-                        )
+            elif line.startswith("Cluster:") and current_section == "clusters":
+                # Parse cluster definition
+                cluster_name = line[8:].strip()
+                cluster_type = ""
+                cluster_members = []
 
-                elif current_section == "relationships":
-                    # Parse: [source_var] >> [dest_var]
-                    match = re.search(r"^(\w+)\s*>>\s*(\w+)$", content)
-                    if match:
-                        blueprint_dict["relationships"].append(
-                            {
-                                "source": match.group(1),
-                                "destination": match.group(2),
-                                "connection_type": "default",
-                            }
-                        )
+                # Look ahead for Type and Members
+                while i < len(lines):
+                    next_line = lines[i].strip()
+                    if not next_line or next_line.startswith("-"):
+                        break
+
+                    if next_line.startswith("Type:"):
+                        cluster_type = next_line[5:].strip()
+                    elif next_line.startswith("Members:"):
+                        members_str = next_line[8:].strip()
+                        cluster_members = [m.strip() for m in members_str.split(",")]
+
+                    i += 1
+
+                blueprint_dict["clusters"].append(
+                    {"name": cluster_name, "nodes": cluster_members}
+                )
+
+            elif line.startswith("-") and current_section == "relationships":
+                # Parse: [source_var] >> [dest_var]
+                content = line[1:].strip()
+                match = re.search(r"^(\w+)\s*>>\s*(\w+)$", content)
+                if match:
+                    blueprint_dict["relationships"].append(
+                        {
+                            "source": match.group(1),
+                            "destination": match.group(2),
+                            "connection_type": "default",
+                        }
+                    )
 
         return blueprint_dict
 

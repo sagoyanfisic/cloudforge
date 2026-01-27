@@ -208,18 +208,6 @@ class DiagramGenerationService:
             logger.error(f"Generation failed: {str(e)}")
             raise GenerationDomainError(f"Generation failed: {str(e)}")
 
-    def get_diagram(self, diagram_id: str) -> Optional[StoredDiagram]:
-        """Obtener diagrama almacenado"""
-        return self.repository.get(diagram_id)
-
-    def list_recent_diagrams(self, limit: int = 10) -> list[StoredDiagram]:
-        """Listar diagramas recientes"""
-        return self.repository.list_recent(limit)
-
-    def delete_diagram(self, diagram_id: str) -> bool:
-        """Eliminar diagrama"""
-        return self.repository.delete(diagram_id)
-
 
 class NaturalLanguageDiagramService:
     """Servicio: Generar diagramas desde lenguaje natural

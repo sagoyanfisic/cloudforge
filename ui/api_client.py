@@ -106,17 +106,6 @@ class CloudForgeAPIClient:
                 "message": f"Error: {str(e)}",
             }
 
-    def get_image_url(self, filename: str) -> str:
-        """Get URL for an image file
-
-        Args:
-            filename: The image filename
-
-        Returns:
-            Full URL to the image
-        """
-        return f"{self.base_url}/images/{filename}"
-
     def health_check(self) -> bool:
         """Check if API is healthy
 

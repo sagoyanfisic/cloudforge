@@ -292,7 +292,7 @@ def render_blueprint_panel(diagram: dict):
 
 
 def render_image_panel(diagram: dict):
-    """Render generated diagram images
+    """Render generated diagram images with compact view and expandable full view
 
     Args:
         diagram: The generated diagram response dictionary
@@ -309,7 +309,13 @@ def render_image_panel(diagram: dict):
         # Use image_base_url for browser access, not api_base_url
         png_url = f"{image_base_url}{output_files['png']}"
         try:
-            st.image(png_url, caption="Architecture Diagram (PNG)")
+            # Compact view (thumbnail)
+            st.image(png_url, caption="Architecture Diagram (PNG)", width=400)
+
+            # Expandable full view
+            with st.expander("🔍 View Full Size"):
+                st.image(png_url, caption="Architecture Diagram (Full Size)")
+
         except Exception as e:
             st.error(f"Failed to load PNG image: {str(e)}")
             # Show debug info if image fails to load
@@ -319,17 +325,23 @@ def render_image_panel(diagram: dict):
                 st.write(f"Image URL: {image_base_url}")
 
     # Download options for other formats
-    col1, col2 = st.columns(2)
+    st.markdown("### 📥 Download Formats")
+    col1, col2, col3 = st.columns(3)
 
     with col1:
         if "pdf" in output_files:
             pdf_url = f"{image_base_url}{output_files['pdf']}"
-            st.markdown(f"[📄 Download PDF]({pdf_url})")
+            st.markdown(f"**[📄 PDF]({pdf_url})**")
 
     with col2:
         if "svg" in output_files:
             svg_url = f"{image_base_url}{output_files['svg']}"
-            st.markdown(f"[🎨 Download SVG]({svg_url})")
+            st.markdown(f"**[🎨 SVG]({svg_url})**")
+
+    with col3:
+        if "png" in output_files:
+            png_url = f"{image_base_url}{output_files['png']}"
+            st.markdown(f"**[🖼️ PNG]({png_url})**")
 
 
 # ============================================================================
