@@ -12,6 +12,7 @@ services:
       - AWS_DIAGRAM_LOG_LEVEL=INFO
       - AWS_DIAGRAM_DIAGRAMS_STORAGE_PATH=/app/diagrams
       - AWS_DIAGRAM_OUTPUT_FORMATS=png,pdf,svg
+      - CLOUDFORGE_DISABLE_AWS_MCP=1
     volumes:
       - ./diagrams:/app/diagrams
     healthcheck:

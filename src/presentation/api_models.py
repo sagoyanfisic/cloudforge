@@ -13,6 +13,23 @@ class GenerateRequest(BaseModel):
     name: str = Field(..., description="Diagram name")
 
 
+class RefineRequest(BaseModel):
+    """Request to refine architecture description"""
+
+    description: str = Field(
+        ..., description="Brief or vague architecture description to refine"
+    )
+
+
+class RefineResponse(BaseModel):
+    """Response from description refinement endpoint"""
+
+    success: bool = Field(..., description="Whether refinement was successful")
+    original: str = Field(..., description="Original input description")
+    refined: str = Field(..., description="Refined and detailed description")
+    message: str = Field(..., description="Status message")
+
+
 class ValidationErrorResponse(BaseModel):
     """Single validation error or warning"""
 

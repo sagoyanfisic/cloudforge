@@ -1,0 +1,24 @@
+digraph "IoT Data Pipeline" {
+	graph [bgcolor="#E74C3C10" fontcolor="#2D3436" fontname="Sans-Serif" fontsize=15 label="IoT Data Pipeline" nodesep=0.60 pad=2.0 rankdir=LR ranksep=0.75 splines=ortho]
+	node [fixedsize=true fontcolor="#2D3436" fontname="Sans-Serif" fontsize=13 height=1.4 imagescale=true labelloc=b shape=box style=rounded width=1.4]
+	edge [color="#7B8894"]
+	subgraph cluster_Network {
+		graph [bgcolor="#3498DB10" fontname="Sans-Serif" fontsize=12 label=Network labeljust=l pencolor="#AEB6BE" rankdir=LR shape=box style=rounded]
+		"5592b4833e2c4bdbb24a0edf700a1beb" [label="API Gateway" height=1.9 image="/Users/yancelsalinas/Documents/claude-code/mcp-aws/.venv/lib/python3.12/site-packages/resources/aws/network/api-gateway.png" shape=none]
+	}
+	subgraph cluster_Integration {
+		graph [bgcolor="#F39C1210" fontname="Sans-Serif" fontsize=12 label=Integration labeljust=l pencolor="#AEB6BE" rankdir=LR shape=box style=rounded]
+		"4ef20ea54cdc44afab24a5707392f847" [label="Kinesis Stream" height=1.9 image="/Users/yancelsalinas/Documents/claude-code/mcp-aws/.venv/lib/python3.12/site-packages/resources/aws/analytics/kinesis.png" shape=none]
+	}
+	subgraph cluster_Compute {
+		graph [bgcolor="#27AE6010" fontname="Sans-Serif" fontsize=12 label=Compute labeljust=l pencolor="#AEB6BE" rankdir=LR shape=box style=rounded]
+		c2485311536a492499b7fb12b303037a [label="Lambda Processor" height=1.9 image="/Users/yancelsalinas/Documents/claude-code/mcp-aws/.venv/lib/python3.12/site-packages/resources/aws/compute/lambda.png" shape=none]
+	}
+	subgraph cluster_Database {
+		graph [bgcolor="#C0392B10" fontname="Sans-Serif" fontsize=12 label=Database labeljust=l pencolor="#AEB6BE" rankdir=LR shape=box style=rounded]
+		"46916e75b6bb4c1991e731905c2b066c" [label="DynamoDB Table" height=1.9 image="/Users/yancelsalinas/Documents/claude-code/mcp-aws/.venv/lib/python3.12/site-packages/resources/aws/database/dynamodb-table.png" shape=none]
+	}
+	"5592b4833e2c4bdbb24a0edf700a1beb" -> "4ef20ea54cdc44afab24a5707392f847" [label=Forwards dir=forward fontcolor="#2D3436" fontname="Sans-Serif" fontsize=13]
+	"4ef20ea54cdc44afab24a5707392f847" -> c2485311536a492499b7fb12b303037a [label=Triggers dir=forward fontcolor="#2D3436" fontname="Sans-Serif" fontsize=13]
+	c2485311536a492499b7fb12b303037a -> "46916e75b6bb4c1991e731905c2b066c" [label="Reads/Writes" dir=forward fontcolor="#2D3436" fontname="Sans-Serif" fontsize=13]
+}

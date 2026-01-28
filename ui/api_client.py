@@ -32,6 +32,32 @@ class CloudForgeAPIClient:
                 "message": f"API connection failed: {str(e)}",
             }
 
+    def refine_description(self, description: str) -> dict[str, Any]:
+        """Refine a brief architecture description into a detailed prompt.
+
+        Args:
+            description: Brief or vague architecture description
+
+        Returns:
+            Dictionary with success status, original and refined descriptions
+        """
+        try:
+            payload = {"description": description}
+            response = self.session.post(
+                f"{self.base_url}/v1/diagrams/refine",
+                json=payload,
+                timeout=60,
+            )
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            return {
+                "success": False,
+                "original": description,
+                "refined": description,
+                "message": f"Refinement request failed: {str(e)}",
+            }
+
     def generate_diagram(self, description: str, name: str) -> dict[str, Any]:
         """Generate diagram from natural language description."""
         try:

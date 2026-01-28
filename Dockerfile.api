@@ -8,6 +8,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     graphviz \
     && rm -rf /var/lib/apt/lists/*
 
+# Note: uvx (Anthropic CLI) requires npm and Node.js
+# AWS MCP is disabled in Docker by default (CLOUDFORGE_DISABLE_AWS_MCP=1)
+# To enable locally: install uvx via npm and set CLOUDFORGE_DISABLE_AWS_MCP=0
+
 # Copy project files
 COPY . .
 

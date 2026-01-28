@@ -1,6 +1,7 @@
 """CloudForge Streamlit Web UI
 
 Interactive interface for generating AWS architecture diagrams from natural language.
+Two-step process: Refine Description → Review → Generate Diagram
 Displays validation results, blueprints, code, and diagram images.
 """
 
@@ -28,31 +29,26 @@ API_URL = os.getenv("CLOUDFORGE_API_URL", "http://localhost:8000")
 # Initialize API client
 api_client = CloudForgeAPIClient(base_url=API_URL)
 
-# Build browser-accessible image URL (convert api:8000 to localhost:8000 for browser access)
+# Build browser-accessible image URL
 def get_browser_image_url(filename: str) -> str:
     """Get image URL that works in the browser.
 
     Converts internal Docker hostname (api:8000) to localhost:8000 for browser access.
-    This ensures images can be displayed whether accessed locally or via Docker.
-
-    Args:
-        filename: Image filename from API response
-
-    Returns:
-        Full URL accessible from the browser
     """
     if "api:8000" in API_URL:
-        # Convert Docker internal hostname to localhost for browser
         browser_url = API_URL.replace("api:8000", "localhost:8000")
         return f"{browser_url}/images/{filename}"
-    # For local development, use API_URL as-is
     return f"{API_URL}/images/{filename}"
 
 # Initialize session state
+if "original_description" not in st.session_state:
+    st.session_state.original_description = ""
+if "refined_description" not in st.session_state:
+    st.session_state.refined_description = ""
 if "current_diagram" not in st.session_state:
     st.session_state.current_diagram = None
-if "api_status" not in st.session_state:
-    st.session_state.api_status = None
+if "step" not in st.session_state:
+    st.session_state.step = "input"  # input → review → generated
 
 
 # ============================================================================
@@ -61,11 +57,7 @@ if "api_status" not in st.session_state:
 
 
 def render_validation_panel(validation: dict) -> None:
-    """Render AST validation panel.
-    
-    Args:
-        validation: Validation response from API
-    """
+    """Render AST validation panel."""
     if not validation:
         return
 
@@ -103,233 +95,250 @@ def render_validation_panel(validation: dict) -> None:
                 st.warning(f"**{warning.get('field', 'Unknown')}**: {warning.get('message', 'No message')}")
 
 
-def render_diagram_image(output_files: dict) -> None:
-    """Render diagram image with expander for full size.
-    
-    Args:
-        output_files: Dict of format -> file path from API
-    """
-    if not output_files or "png" not in output_files:
-        st.warning("No diagram image available")
-        return
-
-    png_path = output_files.get("png", "")
-    if not png_path:
-        return
-
-    # Get image URL that works in the browser (handles Docker hostname conversion)
-    png_url = get_browser_image_url(Path(png_path).name)
-
-    # Display thumbnail in columns
-    col_thumb, col_expand = st.columns([3, 1])
-
-    with col_thumb:
-        st.image(png_url, use_column_width=True, caption="AWS Architecture Diagram")
-
-    with col_expand:
-        if st.button("🔍 Expand", key="expand_image"):
-            st.session_state.show_full_image = True
-
-    # Show full size in expander if requested
-    if st.session_state.get("show_full_image"):
-        with st.expander("Full Size Diagram", expanded=True):
-            st.image(png_url, use_column_width=True)
-
-
 def render_blueprint_panel(blueprint: dict) -> None:
-    """Render blueprint details panel.
-    
-    Args:
-        blueprint: Blueprint dict from API
-    """
+    """Render blueprint panel."""
     if not blueprint:
         return
 
-    with st.expander("📋 Technical Blueprint"):
+    st.markdown("### 📋 Architecture Blueprint")
+
+    # Blueprint info
+    col1, col2 = st.columns(2)
+    with col1:
         st.markdown(f"**Title**: {blueprint.get('title', 'N/A')}")
-        st.markdown(f"**Description**: {blueprint.get('description', 'N/A')}")
+    with col2:
+        st.markdown(f"**Services**: {len(blueprint.get('nodes', []))}")
 
-        if blueprint.get("nodes"):
-            st.markdown("**Services**:")
-            for node in blueprint.get("nodes", []):
-                st.markdown(
-                    f"- {node.get('name')} ({node.get('service_type')}) "
-                    f"[{node.get('region', 'default')}]"
-                )
+    # Services
+    with st.expander("📊 Services Detected"):
+        nodes = blueprint.get("nodes", [])
+        for node in nodes:
+            st.markdown(f"- **{node.get('name')}** ({node.get('service_type')})")
 
-        if blueprint.get("relationships"):
-            st.markdown("**Connections**:")
-            for rel in blueprint.get("relationships", []):
-                st.markdown(
-                    f"- {rel.get('source')} → {rel.get('destination')} "
-                    f"({rel.get('connection_type', 'default')})"
-                )
+    # Relationships
+    if blueprint.get("relationships"):
+        with st.expander("🔗 Relationships"):
+            rels = blueprint.get("relationships", [])
+            for rel in rels:
+                st.markdown(f"- {rel.get('source')} → {rel.get('destination')} [{rel.get('connection_type')}]")
+
+    # Best practices
+    if blueprint.get("best_practices"):
+        with st.expander("🎯 AWS Best Practices"):
+            for practice in blueprint.get("best_practices", []):
+                st.markdown(f"✓ {practice}")
 
 
 def render_code_panel(code: str) -> None:
-    """Render generated Python code panel.
-    
-    Args:
-        code: Generated Python code
-    """
+    """Render generated code panel."""
     if not code:
         return
 
-    with st.expander("💻 Generated Code"):
-        st.code(code, language="python")
-
-
-def render_history_panel() -> None:
-    """Render recent diagrams history panel."""
-    st.markdown("### 📚 Recent Diagrams")
-
-    history = api_client.list_diagrams()
-    diagrams = history.get("diagrams", [])
-
-    if not diagrams:
-        st.info("No diagrams saved yet")
-        return
-
-    # Show only last 5
-    for diagram in diagrams[:5]:
-        col1, col2, col3 = st.columns([2, 1, 1])
-
-        with col1:
-            st.markdown(f"**{diagram.get('name')}**")
-            st.caption(diagram.get("created_at", "")[:10])
-
-        with col2:
-            if st.button("📖 View", key=f"view_{diagram.get('id')}"):
-                st.session_state.view_diagram_id = diagram.get("id")
-                st.rerun()
-
-        with col3:
-            if st.button("🗑️ Delete", key=f"delete_{diagram.get('id')}"):
-                api_client.delete_diagram(diagram.get("id"))
-                st.success("Diagram deleted")
-                st.rerun()
+    st.markdown("### 💻 Generated Code")
+    st.code(code, language="python")
 
 
 # ============================================================================
-# Main UI
+# Main UI Layout
 # ============================================================================
 
+# Header
+st.markdown("# 🏗️ CloudForge - AWS Architecture Diagram Generator")
+st.markdown("Generate professional AWS architecture diagrams from natural language descriptions.")
 
-def main():
-    """Main Streamlit application."""
-    st.markdown("# 🏗️ CloudForge - AI-Powered AWS Architecture Diagrams")
-    st.markdown(
-        "Generate AWS architecture diagrams from natural language descriptions "
-        "with automated validation and code generation."
-    )
+# Tabs for different sections
+tab1, tab2, tab3 = st.tabs(["📝 Generate", "📚 History", "ℹ️ About"])
 
-    # Check API status
-    health = api_client.health_check()
-    st.session_state.api_status = health
+with tab1:
+    # Two-step workflow
+    col_left, col_right = st.columns([2, 1], gap="large")
 
-    if health.get("status") == "error":
-        st.error(
-            f"❌ API Connection Failed: {health.get('message')}\n\n"
-            f"Make sure the API is running:\n"
-            f"```\n"
-            f"uvicorn src.api:app --host 0.0.0.0 --port 8000\n"
-            f"```"
-        )
-        return
+    with col_left:
+        st.markdown("## Step 1: Describe Your Architecture")
+        st.markdown("*Enter a brief or detailed description of your AWS architecture*")
 
-    if not health.get("pipeline_enabled"):
-        st.warning(
-            "⚠️ LangGraph Pipeline not available. "
-            "Set GOOGLE_API_KEY environment variable to enable diagram generation."
+        # Input area
+        user_input = st.text_area(
+            "Architecture Description:",
+            value=st.session_state.original_description,
+            height=150,
+            placeholder="Example: API Gateway with Lambda processing and DynamoDB storage\n\nOr brief: Lambda, API, DB",
+            key="description_input",
         )
 
-    # Create two columns: main content and sidebar
-    col_main, col_sidebar = st.columns([3, 1])
+        diagram_name = st.text_input(
+            "Diagram Name:",
+            value="my_architecture",
+            placeholder="e.g., serverless_api",
+        )
 
-    # ========================================================================
-    # Main Column: Editor and Results
-    # ========================================================================
-
-    with col_main:
-        st.markdown("## 📝 Describe Your Architecture")
-
-        # Input form
-        col_desc, col_name = st.columns([2, 1])
-
-        with col_desc:
-            description = st.text_area(
-                "Architecture Description",
-                height=150,
-                placeholder=(
-                    "Example: IoT system with Kinesis for data ingestion, "
-                    "Lambda for processing, and DynamoDB for storage"
-                ),
-            )
-
-        with col_name:
-            diagram_name = st.text_input(
-                "Diagram Name",
-                placeholder="my_architecture",
-            )
-
-        # Generate button
-        if st.button("🚀 Generate Architecture", type="primary", use_container_width=True):
-            if not description or not diagram_name:
-                st.error("Please provide both description and diagram name")
-            elif not health.get("pipeline_enabled"):
-                st.error("LangGraph Pipeline not available")
+        # Step 1: Refine Button
+        if st.button("🔧 Refine Prompt", type="primary", use_container_width=True):
+            if not user_input.strip():
+                st.error("❌ Please enter an architecture description")
             else:
-                with st.spinner("🤖 Generating diagram..."):
-                    result = api_client.generate_diagram(description, diagram_name)
+                st.session_state.original_description = user_input
+
+                with st.spinner("✨ Refining description..."):
+                    try:
+                        refine_result = api_client.refine_description(user_input)
+
+                        if refine_result.get("success"):
+                            st.session_state.refined_description = refine_result.get("refined", "")
+                            st.session_state.step = "review"
+                            st.rerun()
+                        else:
+                            st.error(f"❌ Refinement failed: {refine_result.get('message')}")
+                    except Exception as e:
+                        st.error(f"❌ Error: {str(e)}")
+
+    with col_right:
+        st.markdown("### 📊 Workflow Status")
+
+        # Status indicators
+        if st.session_state.step == "input":
+            st.info("📝 **Step 1**: Describe your architecture")
+        elif st.session_state.step == "review":
+            st.info("✅ **Step 1**: Complete\n📋 **Step 2**: Review refined prompt")
+        elif st.session_state.step == "generated":
+            st.success("✅ **All Steps**: Complete")
+
+    # Step 2: Review Refined Description
+    if st.session_state.step in ["review", "generated"]:
+        st.divider()
+        st.markdown("## Step 2: Review & Approve Refined Description")
+        st.markdown("*The AI has enhanced your description with architectural details*")
+
+        with st.expander("📋 Original Description", expanded=False):
+            st.markdown(f"```\n{st.session_state.original_description}\n```")
+
+        st.markdown("### 🔄 Refined Description (AI Enhanced)")
+        st.markdown("*Includes data flows, layers, technical context, and AWS best practices*")
+
+        refined_edited = st.text_area(
+            "Edit if needed:",
+            value=st.session_state.refined_description,
+            height=250,
+            key="refined_input",
+        )
+
+        st.session_state.refined_description = refined_edited
+
+        # Approval buttons
+        col_approve, col_edit = st.columns(2)
+
+        with col_approve:
+            if st.button("✅ Looks Good! Generate Diagram", type="primary", use_container_width=True):
+                if not diagram_name.strip():
+                    st.error("❌ Please enter a diagram name")
+                else:
+                    st.session_state.step = "generating"
+                    st.rerun()
+
+        with col_edit:
+            if st.button("✏️ Edit Description", use_container_width=True):
+                st.session_state.step = "input"
+                st.rerun()
+
+    # Step 3: Generate Diagram
+    if st.session_state.step == "generating":
+        st.divider()
+        st.markdown("## Step 3: Generating Diagram...")
+
+        with st.spinner("🎨 Generating architecture diagram (this may take a moment)..."):
+            try:
+                result = api_client.generate_diagram(
+                    st.session_state.refined_description,
+                    diagram_name,
+                )
+
+                if result.get("success"):
                     st.session_state.current_diagram = result
+                    st.session_state.step = "generated"
+                    st.success("✅ Diagram generated successfully!")
+                    st.rerun()
+                else:
+                    st.error(f"❌ Generation failed: {result.get('message')}")
+                    if st.button("🔙 Back to Review"):
+                        st.session_state.step = "review"
+                        st.rerun()
+            except Exception as e:
+                st.error(f"❌ Error: {str(e)}")
+                if st.button("🔙 Back to Review"):
+                    st.session_state.step = "review"
+                    st.rerun()
 
-                    if result.get("success"):
-                        st.success("✅ Diagram generated successfully!")
-                    else:
-                        st.error(f"❌ Generation failed: {result.get('message')}")
+    # Display Generated Diagram
+    if st.session_state.step == "generated" and st.session_state.current_diagram:
+        st.divider()
+        st.markdown("## 🎉 Architecture Diagram Generated!")
 
-        # Display results if available
-        if st.session_state.current_diagram:
-            result = st.session_state.current_diagram
+        diagram = st.session_state.current_diagram
 
-            if result.get("success"):
-                st.markdown("---")
-                st.markdown("## 🎨 Generated Diagram")
+        # Diagram image
+        output_files = diagram.get("output_files", {})
+        if output_files.get("png"):
+            png_url = get_browser_image_url(Path(output_files["png"]).name)
+            st.image(png_url, use_column_width=True, caption="AWS Architecture Diagram")
 
-                render_diagram_image(result.get("output_files", {}))
+        # Tabs for details
+        detail_tab1, detail_tab2, detail_tab3, detail_tab4 = st.tabs(
+            ["📋 Blueprint", "💻 Code", "✔️ Validation", "📁 Files"]
+        )
 
-                st.markdown("## 📊 Analysis")
+        with detail_tab1:
+            render_blueprint_panel(diagram.get("blueprint"))
 
-                # Validation panel
-                validation = result.get("validation")
-                if validation:
-                    render_validation_panel(validation)
+        with detail_tab2:
+            render_code_panel(diagram.get("code"))
 
-                st.markdown("---")
+        with detail_tab3:
+            render_validation_panel(diagram.get("validation"))
 
-                # Blueprint and code panels
-                col_blue, col_code = st.columns([1, 1])
-                with col_blue:
-                    render_blueprint_panel(result.get("blueprint"))
-                with col_code:
-                    render_code_panel(result.get("code"))
+        with detail_tab4:
+            st.markdown("### 📁 Generated Files")
+            for fmt, path in output_files.items():
+                st.markdown(f"✓ **{fmt.upper()}**: `{Path(path).name}`")
 
-    # ========================================================================
-    # Sidebar: History and Status
-    # ========================================================================
+        # Action buttons
+        col_new, col_export = st.columns(2)
+        with col_new:
+            if st.button("🆕 Create Another Diagram", use_container_width=True):
+                st.session_state.step = "input"
+                st.session_state.original_description = ""
+                st.session_state.refined_description = ""
+                st.session_state.current_diagram = None
+                st.rerun()
 
-    with col_sidebar:
-        st.markdown("## 📡 Status")
+        with col_export:
+            st.info("💾 Download images from the browser (right-click on diagram)")
 
-        if health.get("pipeline_enabled"):
-            st.success("✅ Pipeline Ready")
-        else:
-            st.warning("⚠️ Pipeline Unavailable")
+with tab2:
+    st.markdown("## 📚 Recent Diagrams")
+    st.info("Recent diagrams will appear here")
+    # TODO: Implement history fetching
 
-        st.markdown("---")
+with tab3:
+    st.markdown("## ℹ️ About CloudForge")
+    st.markdown("""
+    **CloudForge** is an AI-powered AWS architecture diagram generator.
 
-        render_history_panel()
+    ### Features:
+    - 🤖 **AI-Powered**: Uses advanced LLM to understand architecture descriptions
+    - 🔧 **Smart Refinement**: Automatically enhances vague descriptions with technical details
+    - 📚 **AWS Best Practices**: Integrates AWS documentation for recommended patterns
+    - ✅ **Validation**: Validates generated code for security and structure
+    - 🎨 **Beautiful Diagrams**: Generates professional-quality architecture diagrams
 
+    ### Two-Step Workflow:
+    1. **Refine**: Describe your architecture (brief or detailed)
+    2. **Review**: Approve the AI-enhanced description
+    3. **Generate**: Get your diagram instantly
 
-if __name__ == "__main__":
-    main()
+    ### Supported AWS Services:
+    Lambda, API Gateway, RDS, DynamoDB, S3, CloudFront, Kinesis, SQS, SNS,
+    CloudWatch, IAM, and many more!
+
+    ---
+    Made with ❤️ by the CloudForge team
+    """)
