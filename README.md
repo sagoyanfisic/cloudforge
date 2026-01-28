@@ -1,80 +1,115 @@
 # 🔥 CloudForge
 
-**AI-Powered AWS Architecture Diagrams with Validation & Persistence**
+**AI-Powered AWS Architecture Diagrams with Natural Language Processing, Validation & Persistence**
 
-[![Python](https://img.shields.io/badge/Python-3.10%2B-blue)](https://www.python.org)
+[![Python](https://img.shields.io/badge/Python-3.12%2B-blue)](https://www.python.org)
 [![Docker](https://img.shields.io/badge/Docker-Yes-brightgreen)](https://www.docker.com)
+[![LangChain](https://img.shields.io/badge/LangChain-v0.1.0-orange)](https://python.langchain.com)
+[![Streamlit](https://img.shields.io/badge/Streamlit-Web%20UI-red)](https://streamlit.io)
+[![FastAPI](https://img.shields.io/badge/FastAPI-REST%20API-009688)](https://fastapi.tiangolo.com)
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
-[![MCP](https://img.shields.io/badge/Protocol-MCP-purple)](https://modelcontextprotocol.io)
 
-CloudForge is an intelligent MCP server that transforms Python code into professional AWS architecture diagrams with built-in validation and persistent storage.
+CloudForge is an AI-powered platform that generates **professional AWS architecture diagrams from natural language descriptions**. Simply describe your architecture, and CloudForge creates production-ready diagrams with visual styling, validation, and persistence.
 
-## ✨ Features
+## ✨ Key Features
 
-### 🎨 Diagram Generation
-- Create AWS architecture diagrams from Python code
-- Support for 50+ AWS components (EC2, Lambda, RDS, S3, etc.)
-- Multiple output formats: PNG, PDF, SVG
-- Professional visualization with GraphViz
+### 🤖 Natural Language Processing
+- **Describe in plain English**: "Production SaaS with Lambda, RDS, CloudFront CDN"
+- **LangChain + Gemini AI**: Advanced NLP pipeline with auto-retry and structured output
+- **LangGraph Orchestration**: State machine for reliable multi-step generation
+- **Blueprint Generation**: Extracts services, relationships, and architecture patterns
+
+### 🎨 Professional Diagrams
+- **Auto-Generated Visuals**: Color-coded by environment (production=red, staging=orange, dev=blue)
+- **Organized Clusters**: Services grouped by category (Compute, Database, Network, Storage)
+- **Edge Labels**: Connection types automatically labeled (triggers, reads_writes, forwards)
+- **Multiple Formats**: PNG, PDF, SVG output
+- **Production-Ready**: Publication quality with GraphViz rendering
 
 ### ✓ Intelligent Validation
-- Python syntax validation using AST parsing
-- AWS component whitelisting
-- Security scanning (detects dangerous functions)
-- Component relationship analysis
-- Configurable limits (components, relationships)
+- **Python AST Parsing**: Syntax validation of generated code
+- **Security Scanning**: Detects dangerous functions and patterns
+- **Component Whitelisting**: Validates 50+ AWS services
+- **Relationship Analysis**: Ensures logical architecture patterns
+- **Comprehensive Reporting**: Errors, warnings, and component metrics
 
 ### 💾 Persistent Storage
-- Save diagrams with metadata
-- Tag-based organization and filtering
-- SHA256 checksum verification
-- JSON-based indexing for fast retrieval
-- Full CRUD operations
+- **Diagram Management**: Save, retrieve, and organize diagrams
+- **Metadata Tracking**: Created date, tags, environment, service categories
+- **SHA256 Verification**: File integrity checking
+- **JSON Indexing**: Fast retrieval and filtering
+- **Full CRUD Operations**: List, get, delete diagrams
 
-### 🔍 Multi-Account Architecture Support
-- Hub-and-spoke patterns
-- PrivateLink connectivity
-- Cross-region deployments
-- Centralized monitoring
-
-### 📊 Enterprise Ready
-- FastMCP implementation (modern MCP protocol)
-- Pydantic data validation
-- Docker containerization with UV package manager
-- Comprehensive logging and error handling
+### 🚀 Full-Stack Architecture
+- **FastAPI Backend**: REST API for diagram generation and management
+- **Streamlit Web UI**: Interactive interface for end users
+- **Docker Compose**: Complete local development and deployment
+- **LangChain Chains**: Specialized processing for blueprint and code generation
+- **Environment Detection**: Automatic production/staging/dev classification
 
 ## 🚀 Quick Start
 
 ### Prerequisites
 
-- Python 3.10+
-- GraphViz (diagram rendering engine)
-- Docker (optional)
+- Python 3.12+
+- GraphViz (for diagram rendering)
+- Docker & Docker Compose (recommended)
+- Google API Key (for Gemini AI) - get it at https://ai.google.dev
 
-### macOS Installation
+### Option 1: Docker Compose (Recommended)
+
+**Fastest way to get started:**
+
+```bash
+# Set API key
+echo "GOOGLE_API_KEY=your_api_key_here" > .env
+
+# Build and start services
+make build
+make up
+
+# Access the UI
+# Web UI: http://localhost:8501
+# API Docs: http://localhost:8000/docs
+```
+
+**Stop services:**
+```bash
+make down
+```
+
+### Option 2: Local Development
 
 ```bash
 # Install GraphViz
-brew install graphviz
+brew install graphviz          # macOS
+# sudo apt install graphviz    # Ubuntu/Debian
 
 # Install UV package manager
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# Clone repository
-cd /Users/yancelsalinas/Documents/claude-code/mcp-aws
-
-# Install dependencies
+# Clone and setup
+cd /path/to/mcp-aws
 uv pip install -e .
+
+# Set API key
+export GOOGLE_API_KEY="your_api_key_here"
+
+# Run API server
+uvicorn src.api:app --host 0.0.0.0 --port 8000
+
+# In another terminal, run Streamlit UI
+streamlit run ui/app.py --server.port 8501
 ```
 
-### Docker Installation
+### Option 3: Docker Direct
 
 ```bash
 # Build image
 docker build -t cloudforge:latest .
 
-# Run container
-docker run -it cloudforge:latest python -m src
+# Run container with API key
+docker run -e GOOGLE_API_KEY="your_key" -p 8000:8000 cloudforge:latest
 ```
 
 ## 📖 Usage Guide

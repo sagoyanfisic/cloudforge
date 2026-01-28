@@ -1,86 +1,71 @@
 version: '3.8'
 
 services:
-  # MCP Server - Core service (no healthcheck)
-  mcp-server:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: aws-diagram-mcp-server
-    environment:
-      GOOGLE_API_KEY: ${GOOGLE_API_KEY}
-      AWS_DIAGRAM_LOG_LEVEL: ${AWS_DIAGRAM_LOG_LEVEL:-INFO}
-      AWS_DIAGRAM_OUTPUT_FORMATS: png,pdf,svg
-      AWS_DIAGRAM_MAX_COMPONENTS: 100
-      AWS_DIAGRAM_MAX_RELATIONSHIPS: 200
-      AWS_DIAGRAM_DIAGRAMS_STORAGE_PATH: /app/diagrams
-      PYTHONUNBUFFERED: 1
-    volumes:
-      - diagrams_data:/app/diagrams
-    networks:
-      - aws-diagram-network
-    restart: unless-stopped
-
-  # FastAPI Server
   api:
     build:
       context: .
-      dockerfile: Dockerfile
-    container_name: aws-diagram-api
-    command: uvicorn src.presentation.api:app --host 0.0.0.0 --port 8000 --reload
-    environment:
-      GOOGLE_API_KEY: ${GOOGLE_API_KEY}
-      AWS_DIAGRAM_LOG_LEVEL: ${AWS_DIAGRAM_LOG_LEVEL:-INFO}
-      AWS_DIAGRAM_OUTPUT_FORMATS: png,pdf,svg
-      AWS_DIAGRAM_MAX_COMPONENTS: 100
-      AWS_DIAGRAM_MAX_RELATIONSHIPS: 200
-      AWS_DIAGRAM_DIAGRAMS_STORAGE_PATH: /app/diagrams
-      PYTHONUNBUFFERED: 1
+      dockerfile: Dockerfile.api
+    container_name: cloudforge-api
     ports:
       - "8000:8000"
+    environment:
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - AWS_DIAGRAM_LOG_LEVEL=INFO
+      - AWS_DIAGRAM_DIAGRAMS_STORAGE_PATH=/app/diagrams
+      - AWS_DIAGRAM_OUTPUT_FORMATS=png,pdf,svg
     volumes:
-      - diagrams_data:/app/diagrams
-      - .:/app
-    networks:
-      - aws-diagram-network
-    depends_on:
-      - mcp-server
+      - ./diagrams:/app/diagrams
+      - ./.env:/.env
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 10s
-      timeout: 5s
+      interval: 30s
+      timeout: 10s
       retries: 3
-      start_period: 20s
-    restart: unless-stopped
+      start_period: 5s
+    networks:
+      - cloudforge
+    depends_on:
+      - db
 
-  # Streamlit UI
   ui:
     build:
       context: .
-      dockerfile: Dockerfile
-    container_name: aws-diagram-ui
-    command: streamlit run ui/app.py --server.port 8501 --server.address 0.0.0.0
-    environment:
-      CLOUDFORGE_API_URL: http://api:8000
-      STREAMLIT_SERVER_HEADLESS: true
-      STREAMLIT_LOGGER_LEVEL: info
-      PYTHONUNBUFFERED: 1
+      dockerfile: Dockerfile.ui
+    container_name: cloudforge-ui
     ports:
       - "8501:8501"
+    environment:
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - CLOUDFORGE_API_URL=http://api:8000
     volumes:
-      - diagrams_data:/app/diagrams
-      - .:/app
-    networks:
-      - aws-diagram-network
+      - ./.env:/.env
     depends_on:
-      api:
-        condition: service_healthy
-    restart: unless-stopped
+      - api
+    networks:
+      - cloudforge
+
+  # Optional: Database/cache service
+  db:
+    image: postgres:15-alpine
+    container_name: cloudforge-db
+    environment:
+      - POSTGRES_USER=cloudforge
+      - POSTGRES_PASSWORD=changeme
+      - POSTGRES_DB=cloudforge
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - cloudforge
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cloudforge"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 networks:
-  aws-diagram-network:
+  cloudforge:
     driver: bridge
 
 volumes:
-  diagrams_data:
-    driver: local
+  postgres_data:
+
