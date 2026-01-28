@@ -28,6 +28,26 @@ API_URL = os.getenv("CLOUDFORGE_API_URL", "http://localhost:8000")
 # Initialize API client
 api_client = CloudForgeAPIClient(base_url=API_URL)
 
+# Build browser-accessible image URL (convert api:8000 to localhost:8000 for browser access)
+def get_browser_image_url(filename: str) -> str:
+    """Get image URL that works in the browser.
+
+    Converts internal Docker hostname (api:8000) to localhost:8000 for browser access.
+    This ensures images can be displayed whether accessed locally or via Docker.
+
+    Args:
+        filename: Image filename from API response
+
+    Returns:
+        Full URL accessible from the browser
+    """
+    if "api:8000" in API_URL:
+        # Convert Docker internal hostname to localhost for browser
+        browser_url = API_URL.replace("api:8000", "localhost:8000")
+        return f"{browser_url}/images/{filename}"
+    # For local development, use API_URL as-is
+    return f"{API_URL}/images/{filename}"
+
 # Initialize session state
 if "current_diagram" not in st.session_state:
     st.session_state.current_diagram = None
@@ -97,8 +117,8 @@ def render_diagram_image(output_files: dict) -> None:
     if not png_path:
         return
 
-    # Get image URL
-    png_url = api_client.get_image_url(Path(png_path).name)
+    # Get image URL that works in the browser (handles Docker hostname conversion)
+    png_url = get_browser_image_url(Path(png_path).name)
 
     # Display thumbnail in columns
     col_thumb, col_expand = st.columns([3, 1])

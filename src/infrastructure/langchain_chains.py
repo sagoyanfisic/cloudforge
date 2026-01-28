@@ -219,7 +219,8 @@ IMPORT MAPPING (ONLY from these):
 - database: from diagrams.aws.database import RDS, ElastiCache, Redshift
 - network: from diagrams.aws.network import APIGateway, ALB, NLB, NATGateway, Route53
 - storage: from diagrams.aws.storage import S3, EBS, EFS
-- integration: from diagrams.aws.integration import SQS, SNS, Kinesis
+- integration: from diagrams.aws.integration import SQS, SNS
+- analytics: from diagrams.aws.analytics import Kinesis
 
 VALID CLASSES TO USE:
 Lambda, EC2, ECS, Batch, RDS, ElastiCache, Redshift, S3, EBS, EFS, APIGateway, ALB, NLB, NATGateway, Route53, SQS, SNS, Kinesis
