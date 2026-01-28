@@ -4,6 +4,7 @@ import subprocess
 from pathlib import Path
 from typing import Optional
 import logging
+import re
 
 from src.infrastructure.config import settings
 
@@ -39,7 +40,7 @@ class DiagramGenerator:
             # Create a temporary script file
             script_file = self.temp_dir / f"{diagram_name}_script.py"
 
-            # Inject output configuration
+            # Inject output configuration and dynamic imports
             modified_code = self._inject_output_config(code, diagram_name)
             script_file.write_text(modified_code, encoding="utf-8")
 
@@ -73,33 +74,160 @@ class DiagramGenerator:
             raise
 
     def _inject_output_config(self, code: str, diagram_name: str) -> str:
-        """Inject output directory configuration into the code
+        """Inject dynamic imports and output configuration into the code
 
-        Replaces the filename parameter in the Diagram context manager with the
-        proper temporary directory path.
+        Prepends wildcard imports for all diagrams modules, similar to AWS MCP Server approach.
+        Also ensures show=False and proper output filename.
         """
-        import re
+        # Get absolute path for the output
+        output_filename = str((self.temp_dir / diagram_name).expanduser().absolute())
 
-        # Pattern to match: with Diagram(..., filename="...", show=...)
-        # We need to replace filename parameter while keeping other parameters
-        pattern = r'(with\s+Diagram\s*\([^)]*filename\s*=\s*)"[^"]*"'
+        # Prepend dynamic imports (wildcard imports like AWS MCP Server)
+        imports = """import os
+from diagrams import Diagram, Cluster, Edge
+from diagrams.aws.cost import *
+from diagrams.aws.ar import *
+from diagrams.aws.general import *
+from diagrams.aws.database import *
+from diagrams.aws.management import *
+from diagrams.aws.ml import *
+from diagrams.aws.game import *
+from diagrams.aws.enablement import *
+from diagrams.aws.network import *
+from diagrams.aws.quantum import *
+from diagrams.aws.iot import *
+from diagrams.aws.robotics import *
+from diagrams.aws.migration import *
+from diagrams.aws.mobile import *
+from diagrams.aws.compute import *
+from diagrams.aws.media import *
+from diagrams.aws.engagement import *
+from diagrams.aws.security import *
+from diagrams.aws.devtools import *
+from diagrams.aws.integration import *
+from diagrams.aws.business import *
+from diagrams.aws.analytics import *
+from diagrams.aws.blockchain import *
+from diagrams.aws.storage import *
+from diagrams.aws.satellite import *
+from diagrams.aws.enduser import *
+from diagrams.onprem.vcs import *
+from diagrams.onprem.database import *
+from diagrams.onprem.gitops import *
+from diagrams.onprem.workflow import *
+from diagrams.onprem.etl import *
+from diagrams.onprem.inmemory import *
+from diagrams.onprem.identity import *
+from diagrams.onprem.network import *
+from diagrams.onprem.cd import *
+from diagrams.onprem.container import *
+from diagrams.onprem.certificates import *
+from diagrams.onprem.mlops import *
+from diagrams.onprem.dns import *
+from diagrams.onprem.compute import *
+from diagrams.onprem.logging import *
+from diagrams.onprem.registry import *
+from diagrams.onprem.security import *
+from diagrams.onprem.client import *
+from diagrams.onprem.groupware import *
+from diagrams.onprem.iac import *
+from diagrams.onprem.analytics import *
+from diagrams.onprem.messaging import *
+from diagrams.onprem.tracing import *
+from diagrams.onprem.ci import *
+from diagrams.onprem.search import *
+from diagrams.onprem.storage import *
+from diagrams.onprem.auth import *
+from diagrams.onprem.monitoring import *
+from diagrams.onprem.aggregator import *
+from diagrams.onprem.queue import *
+from diagrams.k8s.others import *
+from diagrams.k8s.rbac import *
+from diagrams.k8s.network import *
+from diagrams.k8s.ecosystem import *
+from diagrams.k8s.compute import *
+from diagrams.k8s.chaos import *
+from diagrams.k8s.infra import *
+from diagrams.k8s.podconfig import *
+from diagrams.k8s.controlplane import *
+from diagrams.k8s.clusterconfig import *
+from diagrams.k8s.storage import *
+from diagrams.k8s.group import *
+from diagrams.generic.database import *
+from diagrams.generic.blank import *
+from diagrams.generic.network import *
+from diagrams.generic.virtualization import *
+from diagrams.generic.place import *
+from diagrams.generic.device import *
+from diagrams.generic.compute import *
+from diagrams.generic.os import *
+from diagrams.generic.storage import *
+from diagrams.saas.crm import *
+from diagrams.saas.identity import *
+from diagrams.saas.chat import *
+from diagrams.saas.recommendation import *
+from diagrams.saas.cdn import *
+from diagrams.saas.communication import *
+from diagrams.saas.media import *
+from diagrams.saas.logging import *
+from diagrams.saas.security import *
+from diagrams.saas.social import *
+from diagrams.saas.alerting import *
+from diagrams.saas.analytics import *
+from diagrams.saas.automation import *
+from diagrams.saas.filesharing import *
 
-        replacement = f'\\1"{self.temp_dir / diagram_name}"'
+"""
 
-        modified_code = re.sub(pattern, replacement, code, count=1)
+        # Remove existing imports from user code to avoid duplicates
+        lines = code.split('\n')
+        filtered_lines = []
+        for line in lines:
+            stripped = line.strip()
+            if not stripped.startswith('import ') and not stripped.startswith('from '):
+                filtered_lines.append(line)
 
-        # Also ensure show=False is set
-        if 'show=False' not in modified_code:
-            # If show parameter is missing, add it
-            pattern = r'(with\s+Diagram\s*\([^)]*)'
-            if 'direction=' in modified_code:
-                # If direction is specified, add show=False before it
-                pattern = r'(direction\s*=\s*)'
-                modified_code = re.sub(pattern, r'show=False, \1', modified_code, count=1)
-            else:
-                # Otherwise add it at the end before the closing paren
-                pattern = r'(\):\s*$)'
-                modified_code = re.sub(pattern, r', show=False\1', modified_code, count=1, flags=re.MULTILINE)
+        user_code = '\n'.join(filtered_lines)
 
-        logger.debug(f"Modified code filename parameter to: {self.temp_dir / diagram_name}")
+        # Process the code to ensure show=False and proper filename
+        if 'with Diagram(' in user_code:
+            # Find all instances of Diagram constructor
+            diagram_pattern = r'with\s+Diagram\s*\((.*?)\)'
+            matches = re.findall(diagram_pattern, user_code)
+
+            for match in matches:
+                original_args = match.strip()
+                new_args = original_args
+
+                # Check if filename parameter exists
+                has_filename = 'filename=' in original_args
+                has_show = 'show=' in original_args
+
+                # Replace or add filename parameter
+                if has_filename:
+                    # Replace existing filename
+                    filename_pattern = r'filename\s*=\s*[\'"][^\'"]*[\'"]'
+                    new_args = re.sub(filename_pattern, f"filename='{output_filename}'", new_args)
+                else:
+                    # Add filename parameter
+                    if new_args and not new_args.endswith(','):
+                        new_args += ', '
+                    new_args += f"filename='{output_filename}'"
+
+                # Add show=False if not present
+                if not has_show:
+                    if new_args and not new_args.endswith(','):
+                        new_args += ', '
+                    new_args += 'show=False'
+
+                # Replace in code
+                user_code = user_code.replace(
+                    f'with Diagram({original_args})',
+                    f'with Diagram({new_args})'
+                )
+
+        # Combine imports with processed user code
+        modified_code = imports + user_code
+
+        logger.debug(f"Injected dynamic imports and set filename to: {output_filename}")
         return modified_code

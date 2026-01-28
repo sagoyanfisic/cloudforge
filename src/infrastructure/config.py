@@ -62,6 +62,9 @@ class Settings(BaseSettings):
 
     def __init__(self, **data: dict) -> None:
         super().__init__(**data)
+        # Expand home directory if path contains tilde
+        if isinstance(self.diagrams_storage_path, Path):
+            self.diagrams_storage_path = self.diagrams_storage_path.expanduser()
         # Convert string output_formats to list
         if isinstance(self.output_formats, str):
             self.output_formats = [fmt.strip() for fmt in self.output_formats.split(",")]
