@@ -17,6 +17,7 @@ from ..infrastructure.config import settings
 from ..infrastructure.mcp_client import get_mcp_client
 from ..infrastructure.storage import DiagramStorage
 from ..infrastructure.validator import DiagramValidator
+from ..infrastructure import server as mcp_server
 from ..application.services import (
     create_diagram_generation_service,
     create_nl_diagram_service,
@@ -204,6 +205,7 @@ async def health_check() -> dict[str, Any]:
     return {
         "status": "healthy",
         "mcp_connected": mcp_client.is_connected(),
+        "pipeline_enabled": mcp_server.pipeline_enabled,
     }
 
 
