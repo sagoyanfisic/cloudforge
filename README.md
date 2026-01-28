@@ -112,63 +112,164 @@ docker build -t cloudforge:latest .
 docker run -e GOOGLE_API_KEY="your_key" -p 8000:8000 cloudforge:latest
 ```
 
+## 📖 How It Works
+
+### Architecture Pipeline
+
+```
+User Input (Natural Language)
+         ↓
+[1] BlueprintArchitectChain (LangChain + Gemini)
+    - Analyzes description
+    - Extracts services, relationships
+    - Generates structured JSON blueprint
+         ↓
+[2] DiagramCoderChain (LangChain + Gemini)
+    - Converts blueprint to Python code
+    - Adds colors, clusters, styling
+    - Generates production-ready code
+         ↓
+[3] Validator (AST Parser)
+    - Checks syntax validity
+    - Validates AWS components
+    - Performs security scanning
+         ↓
+[4] DiagramGenerator (GraphViz)
+    - Executes Python code
+    - Generates PNG/PDF/SVG images
+    - Stores outputs
+         ↓
+[5] Storage Layer (JSON + Files)
+    - Persists diagrams and metadata
+    - Enables retrieval and management
+```
+
+### Complete Workflow
+
+```
+Streamlit Web UI (http://localhost:8501)
+         ↓
+FastAPI Backend (http://localhost:8000)
+         ↓
+LangGraph Pipeline (LangChain orchestration)
+         ↓
+Generated Diagram PNG/PDF/SVG
+         ↓
+Browser Display + Storage
+```
+
 ## 📖 Usage Guide
 
-### 1. Generate a Diagram
+### 1. Generate Diagram from Natural Language (Web UI)
 
-```python
-from diagrams import Diagram
-from diagrams.aws.compute import Lambda
-from diagrams.aws.database import Dynamodb
-from diagrams.aws.network import APIGateway
+Open http://localhost:8501 and describe your architecture:
 
-with Diagram("Serverless App", show=False):
-    api = APIGateway("API Gateway")
-    function = Lambda("Function")
-    database = Dynamodb("DynamoDB")
-
-    api >> function >> database
+```
+"Production microservices with API Gateway, Lambda,
+RDS database, and CloudFront CDN for static assets"
 ```
 
-### 2. Validate Diagram Code
+CloudForge automatically:
+- 🤖 Parses your description
+- 🎨 Generates color-coded diagram
+- ✓ Validates all components
+- 📊 Displays PNG with edge labels
+- 💾 Stores for future reference
 
-Before generating, validate your diagram code:
+### 2. Generate via REST API
 
-- **Syntax**: Verifies valid Python code
-- **Components**: Validates AWS service names
-- **Security**: Detects dangerous functions (exec, eval, etc.)
-- **Limits**: Enforces max components and relationships
-
-### 3. Store Diagrams
-
-Diagrams are automatically stored in:
+```bash
+curl -X POST http://localhost:8000/v1/diagrams/generate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "description": "Serverless API with Lambda and DynamoDB",
+    "name": "serverless_api"
+  }'
 ```
-~/.aws_diagrams/
-├── diagrams/          # Output files (PNG, PDF, SVG)
-├── metadata/          # Metadata information
-└── index.json         # Diagram index
+
+**Response:**
+```json
+{
+  "success": true,
+  "blueprint": {
+    "title": "Serverless REST API",
+    "nodes": [...],
+    "relationships": [...]
+  },
+  "code": "import os\nfrom diagrams import...",
+  "validation": {
+    "is_valid": true,
+    "component_count": 3,
+    "relationship_count": 2,
+    "errors": [],
+    "warnings": []
+  },
+  "output_files": {
+    "png": "/app/diagrams/serverless_api.png"
+  }
+}
 ```
 
-### 4. Manage Saved Diagrams
+### 3. Validation Details
+
+Each diagram includes comprehensive validation:
+
+- **Syntax**: Valid Python code
+- **Components**: AWS services exist and are properly imported
+- **Security**: No dangerous functions (exec, eval, __import__)
+- **Limits**: Respects max components/relationships
+- **Relationships**: Logical architecture patterns
+
+### 4. Visual Features
+
+Generated diagrams include:
+
+- **Color Coding**:
+  - Red (#E74C3C) for Production
+  - Orange (#F39C12) for Staging
+  - Blue (#3498DB) for Development
+
+- **Clusters**: Services organized by category
+  - Network, Compute, Database, Storage, Integration
+
+- **Edge Labels**: Connection types labeled
+  - "forwards" (load balancing)
+  - "triggers" (event-driven)
+  - "reads_writes" (database access)
+  - "pulls" (data retrieval)
+
+### 5. Manage Diagrams
 
 **List diagrams:**
 ```bash
-aws-diagram list
+curl http://localhost:8000/v1/diagrams
 ```
 
-**Filter by tag:**
+**Get specific diagram:**
 ```bash
-aws-diagram list --tag production
+curl http://localhost:8000/v1/diagrams/{diagram_id}
 ```
 
-**Get details:**
+**Delete diagram:**
 ```bash
-aws-diagram get <diagram_id>
+curl -X DELETE http://localhost:8000/v1/diagrams/{diagram_id}
 ```
 
-**Delete:**
-```bash
-aws-diagram delete <diagram_id>
+**Serve image:**
+```
+http://localhost:8000/images/{filename.png}
+```
+
+### 6. Storage Structure
+
+Diagrams are stored in:
+```
+~/.aws_diagrams/
+├── {diagram_name}.png          # Generated image
+├── {diagram_name}.pdf          # PDF version
+├── {diagram_name}.svg          # SVG version
+├── {diagram_name}_script.py    # Generated Python code
+└── metadata/                   # Diagram metadata
 ```
 
 ## ⚙️ Configuration
@@ -279,50 +380,87 @@ Delete a saved diagram.
 
 ## 📚 Examples
 
-### Example 1: Serverless Architecture
+### Example 1: Natural Language to Diagram (Recommended)
 
-```python
-from diagrams import Diagram
-from diagrams.aws.compute import Lambda
-from diagrams.aws.database import Dynamodb
-from diagrams.aws.network import APIGateway
-from diagrams.aws.integration import SQS
+**Via Streamlit Web UI:**
+1. Open http://localhost:8501
+2. Enter description:
+   ```
+   Production e-commerce platform with CloudFront CDN,
+   ALB load balancer, Lambda microservices, RDS PostgreSQL,
+   and S3 for product images
+   ```
+3. Click "Generate Architecture"
+4. View color-coded diagram with automatic clusters and labels
 
-with Diagram("Serverless Architecture", show=False):
-    client = APIGateway("Client")
-    api = APIGateway("API Gateway")
-    lambda_fn = Lambda("Lambda Handler")
-    queue = SQS("Job Queue")
-    processor = Lambda("Job Processor")
-    db = Dynamodb("DynamoDB")
-
-    client >> api >> lambda_fn
-    lambda_fn >> queue >> processor >> db
+**Via REST API:**
+```bash
+curl -X POST http://localhost:8000/v1/diagrams/generate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "description": "Production e-commerce with CloudFront, ALB, Lambda, RDS, S3",
+    "name": "ecommerce_prod"
+  }'
 ```
 
-### Example 2: Microservices Architecture
+### Example 2: Serverless Backend with Natural Language
 
+**Describe:**
+```
+"Production serverless API using API Gateway,
+Lambda functions, DynamoDB for data storage,
+and SQS for async job processing"
+```
+
+**Generated diagram includes:**
+- ✅ Color-coded clusters (Network, Compute, Database, Integration)
+- ✅ Automatic edge labels (triggers, reads_writes, etc.)
+- ✅ Validation report (component count, relationships)
+- ✅ PNG/PDF/SVG outputs
+- ✅ Full validation (syntax, security, limits)
+
+### Example 3: Multi-Tier Application
+
+**Describe:**
+```
+"Production multi-tier SaaS with Route53 for DNS,
+CloudFront CDN, ALB in public subnet,
+ECS microservices in private subnet,
+RDS Multi-AZ primary and replica databases"
+```
+
+**Generated code example:**
 ```python
-from diagrams import Diagram, Cluster
+import os
+from diagrams import Diagram, Cluster, Edge
+from diagrams.aws.network import Route53, CloudFront, ALB
 from diagrams.aws.compute import ECS
-from diagrams.aws.network import ALB, Route53
 from diagrams.aws.database import RDS
 
-with Diagram("Microservices Architecture", show=False):
-    dns = Route53("DNS")
-    lb = ALB("Load Balancer")
+COLOR_PROD = "#E74C3C"
+COLOR_NETWORK = "#3498DB"
+COLOR_COMPUTE = "#F39C12"
+COLOR_DATABASE = "#27AE60"
 
-    with Cluster("Services"):
-        service1 = ECS("Service 1")
-        service2 = ECS("Service 2")
+with Diagram("Multi-tier SaaS", show=False, direction="TB"):
+    with Cluster("DNS & CDN", graph_attr={"bgcolor": f"{COLOR_NETWORK}10"}):
+        dns = Route53("Route53")
+        cdn = CloudFront("CloudFront")
 
-    with Cluster("Data"):
-        db1 = RDS("Primary DB")
-        db2 = RDS("Replica DB")
+    with Cluster("Load Balancing", graph_attr={"bgcolor": f"{COLOR_NETWORK}10"}):
+        lb = ALB("ALB")
 
-    dns >> lb >> [service1, service2]
-    service1 >> db1
-    service2 >> db1 >> db2
+    with Cluster("Compute", graph_attr={"bgcolor": f"{COLOR_COMPUTE}10"}):
+        svc = ECS("Microservices")
+
+    with Cluster("Database", graph_attr={"bgcolor": f"{COLOR_DATABASE}10"}):
+        primary = RDS("Primary DB")
+        replica = RDS("Replica DB")
+
+    dns >> Edge(label="routes") >> cdn
+    cdn >> lb >> svc
+    svc >> Edge(label="reads_writes") >> primary
+    primary >> Edge(label="replicates") >> replica
 ```
 
 ### Example 3: Multi-Region Architecture
@@ -413,32 +551,52 @@ python -c "import src; print(f'CloudForge v{src.__version__}')"
 ```
 cloudforge/
 ├── src/
-│   ├── __init__.py          # Package metadata & entry point
-│   ├── server.py            # FastMCP server implementation
-│   ├── config.py            # Configuration management
-│   ├── models.py            # Pydantic data models
-│   ├── validator.py         # Diagram validation
-│   ├── generator.py         # Diagram generation engine
-│   └── storage.py           # Persistent storage layer
-├── tests/
-│   ├── test_validator.py    # Validator tests
-│   ├── test_storage.py      # Storage tests
-│   └── test_generator.py    # Generator tests
-├── examples/
-│   ├── serverless_app.py
-│   ├── microservices.py
-│   ├── multi_region.py
-│   ├── aws_hub_spoke.py
-│   └── multi_account_thanos.py
-├── images/
-│   ├── README.md
-│   └── multi-region-example.png
-├── .dockerignore             # Docker build optimization
-├── Dockerfile               # Container configuration
-├── pyproject.toml           # Project metadata
-├── uv.lock                  # Dependency lock file
-└── README.md                # This file
+│   ├── __init__.py                          # Package metadata
+│   ├── api.py                               # FastAPI REST server
+│   ├── api_models.py                        # Pydantic API models
+│   ├── server.py                            # MCP server
+│   │
+│   ├── infrastructure/
+│   │   ├── config.py                        # Configuration management
+│   │   ├── langchain_chains.py              # BlueprintArchitectChain, DiagramCoderChain
+│   │   ├── langgraph_pipeline.py            # LangGraph orchestration
+│   │   ├── validator.py                     # AST validation + security scanning
+│   │   ├── generator.py                     # Diagram generation engine
+│   │   ├── storage.py                       # Persistent storage layer
+│   │   └── natural_language.py              # NLP processing utilities
+│   │
+│   └── domain/
+│       └── models.py                        # Core domain models
+
+├── ui/
+│   ├── app.py                               # Streamlit web UI
+│   ├── api_client.py                        # HTTP client for API
+│   └── utils.py                             # UI utilities
+
+├── docker-compose.yml                       # Multi-container orchestration
+├── Dockerfile.api                           # API container
+├── Dockerfile.ui                            # UI container
+├── Makefile                                 # Convenience commands
+├── .env.example                             # Environment variables
+├── README.DOCKER.md                         # Docker setup guide
+├── LANGCHAIN_LANGGRAPH_MIGRATION.md        # Architecture documentation
+├── DOCKER_MIGRATION.md                      # Docker migration notes
+├── NATURAL_LANGUAGE.md                      # NLP pipeline docs
+├── pyproject.toml                           # Project metadata
+├── uv.lock                                  # Dependency lock file
+└── README.md                                # This file
 ```
+
+### Key Components
+
+- **API (`src/api.py`)**: FastAPI server with `/v1/diagrams/generate` endpoint
+- **LangChain Chains**: Blueprint architect and diagram coder with auto-retry
+- **LangGraph Pipeline**: Orchestrates multi-step generation with state management
+- **Validator**: AST parsing, security scanning, component validation
+- **Generator**: Executes code, produces PNG/PDF/SVG
+- **Storage**: Persists diagrams with metadata and SHA256 checksums
+- **Streamlit UI**: Interactive web interface for end users
+- **Docker Compose**: Full local development environment
 
 ## 🧪 Testing
 
