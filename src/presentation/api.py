@@ -29,6 +29,8 @@ from ..domain.models import (
 from .api_models import (
     GenerateRequest,
     GenerateResponse,
+    RefineRequest,
+    RefineResponse,
     ValidationResponse,
     ValidationErrorResponse,
     HistoryResponse,
@@ -207,6 +209,49 @@ async def health_check() -> dict[str, Any]:
         "mcp_connected": mcp_client.is_connected(),
         "pipeline_enabled": mcp_server.pipeline_enabled,
     }
+
+
+# ============================================================================
+# Diagram Refinement Endpoints
+# ============================================================================
+
+
+@app.post("/v1/diagrams/refine", response_model=RefineResponse)
+async def refine_description(request: RefineRequest) -> RefineResponse:
+    """Refine a brief architecture description into a detailed prompt.
+
+    Transforma descripciones vagas/breves en prompts detallados optimizados
+    para generación de diagramas, sin generar código ni diagrama aún.
+
+    Args:
+        request: RefineRequest with brief description
+
+    Returns:
+        RefineResponse with original and refined descriptions
+    """
+    logger.info("🔧 Refining description")
+
+    try:
+        from ..infrastructure.langchain_chains import DescriptionRefinerChain
+
+        refiner = DescriptionRefinerChain()
+        refined = refiner.invoke(request.description)
+
+        return RefineResponse(
+            success=True,
+            original=request.description,
+            refined=refined,
+            message="Description refined successfully",
+        )
+
+    except Exception as e:
+        logger.error(f"❌ Refinement failed: {str(e)}")
+        return RefineResponse(
+            success=False,
+            original=request.description,
+            refined=request.description,
+            message=f"Refinement failed: {str(e)}",
+        )
 
 
 # ============================================================================
