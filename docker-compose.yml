@@ -2,7 +2,7 @@ services:
   api:
     build:
       context: .
-      dockerfile: Dockerfile.api
+      dockerfile: docker/Dockerfile.api
     container_name: cloudforge-api
     ports:
       - "8000:8000"
@@ -29,7 +29,7 @@ services:
   ui:
     build:
       context: .
-      dockerfile: Dockerfile.ui
+      dockerfile: docker/Dockerfile.ui
     container_name: cloudforge-ui
     ports:
       - "8501:8501"
