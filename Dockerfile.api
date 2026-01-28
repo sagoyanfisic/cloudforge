@@ -6,13 +6,11 @@ WORKDIR /app
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     graphviz \
-    curl \
-    nodejs \
-    npm \
     && rm -rf /var/lib/apt/lists/*
 
-# Install uvx (Anthropic CLI for MCP tools)
-RUN npm install -g @anthropic-ai/cli@latest 2>&1 | grep -v "npm WARN" || true
+# Note: uvx (Anthropic CLI) requires npm and Node.js
+# AWS MCP is disabled in Docker by default (CLOUDFORGE_DISABLE_AWS_MCP=1)
+# To enable locally: install uvx via npm and set CLOUDFORGE_DISABLE_AWS_MCP=0
 
 # Copy project files
 COPY . .
