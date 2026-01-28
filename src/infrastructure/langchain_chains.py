@@ -68,6 +68,116 @@ class DiagramCodeOutput(BaseModel):
 # ============================================================================
 
 
+class DescriptionRefinerChain:
+    """LangChain chain for refining vague architecture descriptions into detailed prompts"""
+
+    def __init__(self, api_key: Optional[str] = None):
+        """Initialize description refiner chain
+
+        Args:
+            api_key: Google API key (if None, uses GOOGLE_API_KEY env var)
+        """
+        if api_key is None:
+            api_key = os.getenv("GOOGLE_API_KEY")
+
+        if not api_key:
+            raise ValueError(
+                "GOOGLE_API_KEY not set. Provide it via:\n"
+                "  - api_key parameter\n"
+                "  - GOOGLE_API_KEY environment variable\n"
+                "  - .env file with GOOGLE_API_KEY=your_key"
+            )
+
+        self.llm = ChatGoogleGenerativeAI(
+            model="gemini-2.5-flash",
+            google_api_key=api_key,
+            temperature=0.3,  # Lower temp for structured refinement
+            max_output_tokens=2000,
+        ).with_retry(
+            stop_after_attempt=2,
+            wait_exponential_jitter=True,
+        )
+
+        self.system_prompt = """You are a Senior Solution Architect specializing in AWS cloud architectures.
+
+Your task is to enhance and refine vague or brief architecture descriptions into detailed, technically precise prompts optimized for diagram generation.
+
+REFINEMENT INSTRUCTIONS:
+
+1. **Preserve Core Services** - Do NOT add new AWS services unless they are implicit dependencies:
+   - Example: Adding VPC, NAT Gateway, or Route 53 if they're needed for described services to work
+   - Example: DO NOT add services that weren't mentioned or implied
+
+2. **Detail Data Flows** - Specify interaction patterns:
+   - HTTP/HTTPS requests
+   - Synchronous vs asynchronous calls
+   - Database reads/writes
+   - Message queues and event streams
+   - Example: "Users access via HTTPS to API Gateway" instead of "Users access API Gateway"
+
+3. **Organize in Layers**:
+   - Presentation/Frontend Layer (Users, CloudFront, API Gateway)
+   - Application/Compute Layer (Lambda, EC2, ECS)
+   - Data Layer (RDS, DynamoDB, S3, ElastiCache)
+   - Integration Layer (SQS, SNS, Kinesis, EventBridge)
+   - Security/Monitoring Layer (IAM, Secrets Manager, CloudWatch, X-Ray)
+
+4. **Add Technical Context**:
+   - Regions and availability zones if relevant
+   - Authentication/Authorization mechanisms
+   - VPC configuration if applicable
+   - High availability patterns
+   - Caching strategies
+   - Do NOT change the fundamental architecture
+
+5. **Ensure Clarity**:
+   - Use clear language
+   - Specify connection types
+   - Include throughput/scale hints if available
+   - Mention disaster recovery or failover patterns if needed
+
+OUTPUT FORMAT:
+Return a refined, detailed description that:
+- Maintains all original services
+- Adds technical interaction details
+- Organizes services logically
+- Is ready for architecture diagram generation
+- Stays focused on AWS services and patterns
+
+IMPORTANT: Only enhance, never remove services mentioned by the user.
+"""
+
+    def invoke(self, description: str) -> str:
+        """Refine architecture description
+
+        Args:
+            description: User's brief or vague architecture description
+
+        Returns:
+            str: Refined, detailed description optimized for diagram generation
+        """
+        logger.info("🔧 Refining architecture description...")
+
+        try:
+            prompt = ChatPromptTemplate.from_messages([
+                ("system", self.system_prompt),
+                ("human", f"Original architecture description:\n{description}\n\nPlease refine and enhance this description for diagram generation."),
+            ])
+
+            chain = prompt | self.llm
+
+            response = chain.invoke({})
+            refined = response.content.strip()
+
+            logger.info("✅ Description refined successfully")
+            return refined
+
+        except Exception as e:
+            logger.warning(f"⚠️ Description refinement failed: {str(e)}")
+            logger.info("ℹ️ Proceeding with original description")
+            return description  # Fallback to original
+
+
 class BlueprintArchitectChain:
     """LangChain chain for blueprint generation"""
 

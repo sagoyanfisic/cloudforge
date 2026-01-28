@@ -14,7 +14,7 @@ from datetime import datetime
 from langgraph.graph import StateGraph, START, END
 from pydantic import BaseModel, Field
 
-from .langchain_chains import BlueprintArchitectChain, DiagramCoderChain
+from .langchain_chains import DescriptionRefinerChain, BlueprintArchitectChain, DiagramCoderChain
 from ..infrastructure.validator import DiagramValidator
 from ..infrastructure.generator import DiagramGenerator
 from .aws_mcp_client import get_aws_documentation_client
@@ -53,6 +53,39 @@ class DiagramPipelineState(TypedDict):
 # ============================================================================
 # Node Functions
 # ============================================================================
+
+
+def refine_description_node(state: DiagramPipelineState) -> DiagramPipelineState:
+    """Refine brief/vague architecture description into detailed prompt
+
+    Args:
+        state: Current pipeline state
+
+    Returns:
+        Updated state with refined description
+    """
+    logger.info("🔧 Node: Description Refinement")
+
+    try:
+        original_desc = state["description"]
+
+        # Skip refinement if description is already detailed enough
+        if len(original_desc) > 150 and original_desc.count(",") >= 2:
+            logger.info("ℹ️ Description already detailed, skipping refinement")
+            return state
+
+        chain = DescriptionRefinerChain()
+        refined = chain.invoke(original_desc)
+
+        state["description"] = refined
+        logger.info(f"✅ Description refined: {len(original_desc)} → {len(refined)} chars")
+
+    except Exception as e:
+        error_msg = f"Description refinement failed: {str(e)}"
+        logger.warning(f"⚠️ {error_msg}")
+        # Don't fail pipeline, continue with original description
+
+    return state
 
 
 def blueprint_node(state: DiagramPipelineState) -> DiagramPipelineState:
@@ -334,14 +367,17 @@ def build_pipeline_graph():
     graph = StateGraph(DiagramPipelineState)
 
     # Add nodes
+    graph.add_node("refine", refine_description_node)
     graph.add_node("blueprint", blueprint_node)
     graph.add_node("enrich_mcp", enrich_mcp_node)
     graph.add_node("coder", coder_node)
     graph.add_node("validator", validator_node)
     graph.add_node("generator", generator_node)
 
-    # Add edges (blueprint → enrich_mcp → coder → validator → generator)
-    graph.add_edge(START, "blueprint")
+    # Add edges
+    # refine → blueprint → enrich_mcp → coder → validator → generator
+    graph.add_edge(START, "refine")
+    graph.add_edge("refine", "blueprint")
     graph.add_edge("blueprint", "enrich_mcp")
     graph.add_edge("enrich_mcp", "coder")
     graph.add_edge("coder", "validator")
