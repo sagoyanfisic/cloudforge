@@ -1,10 +1,8 @@
 """Configuration settings for AWS Diagram MCP Server"""
 
-import os
-import json
 from pathlib import Path
 from typing import Optional
-from pydantic import Field, ConfigDict
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from dotenv import load_dotenv
 
@@ -34,11 +32,23 @@ class Settings(BaseSettings):
         alias="AWS_DIAGRAM_MAX_DIAGRAM_SIZE_MB"
     )
 
-    # Output formats - simple string, NOT parsed as JSON
+    # Output formats - stored as str internally, parsed via property
     output_formats: str = Field(
         default="png,pdf,svg",
         alias="AWS_DIAGRAM_OUTPUT_FORMATS"
     )
+
+    @field_validator("output_formats", mode="before")
+    @classmethod
+    def parse_output_formats(cls, v: object) -> str:
+        if isinstance(v, list):
+            return ",".join(v)
+        return str(v)
+
+    @property
+    def output_formats_list(self) -> list[str]:
+        """Return output formats as a list."""
+        return [fmt.strip() for fmt in self.output_formats.split(",")]
 
     # Validation settings
     enable_validation: bool = Field(
@@ -65,9 +75,6 @@ class Settings(BaseSettings):
         # Expand home directory if path contains tilde
         if isinstance(self.diagrams_storage_path, Path):
             self.diagrams_storage_path = self.diagrams_storage_path.expanduser()
-        # Convert string output_formats to list
-        if isinstance(self.output_formats, str):
-            self.output_formats = [fmt.strip() for fmt in self.output_formats.split(",")]
         # Create storage directory if it doesn't exist
         self.diagrams_storage_path.mkdir(parents=True, exist_ok=True)
 

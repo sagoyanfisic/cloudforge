@@ -10,41 +10,19 @@ Replaces manual Gemini calls with LangChain chains featuring:
 import os
 import logging
 from typing import Optional, Any
-from datetime import datetime
 from dotenv import load_dotenv
 
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import PydanticOutputParser
-from langchain_core.runnables import RunnablePassthrough, RunnableLambda
 from pydantic import BaseModel, Field
 
-from ..domain.models import DiagramValidation, ValidationError
+from .nlp.models import BlueprintNode, BlueprintRelationship
 
 # Load .env file
 load_dotenv()
 
 logger = logging.getLogger(__name__)
-
-
-# ============================================================================
-# Output Models (Structured)
-# ============================================================================
-
-
-class BlueprintNode(BaseModel):
-    """Single AWS service node"""
-    name: str = Field(..., description="Service name")
-    variable: str = Field(..., description="Python variable name")
-    service_type: str = Field(..., description="AWS service class")
-    region: Optional[str] = Field(None, description="AWS region")
-
-
-class BlueprintRelationship(BaseModel):
-    """Connection between services"""
-    source: str = Field(..., description="Source variable")
-    destination: str = Field(..., description="Destination variable")
-    connection_type: str = Field(default="default")
 
 
 class BlueprintAnalysisOutput(BaseModel):
