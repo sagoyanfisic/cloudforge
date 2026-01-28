@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field
 from .langchain_chains import BlueprintArchitectChain, DiagramCoderChain
 from ..infrastructure.validator import DiagramValidator
 from ..infrastructure.generator import DiagramGenerator
+from .aws_mcp_client import get_aws_documentation_client
 
 logger = logging.getLogger(__name__)
 
@@ -83,6 +84,89 @@ def blueprint_node(state: DiagramPipelineState) -> DiagramPipelineState:
             return blueprint_node(state)  # Retry
         else:
             raise ValueError(f"Blueprint generation failed after {state['max_retries']} retries")
+
+    return state
+
+
+def enrich_mcp_node(state: DiagramPipelineState) -> DiagramPipelineState:
+    """Enrich blueprint with AWS best practices from Documentation MCP
+
+    Args:
+        state: Current pipeline state with blueprint
+
+    Returns:
+        Updated state with enriched blueprint
+    """
+    logger.info("🔍 Node: AWS MCP Enrichment")
+
+    if not state.get("blueprint"):
+        logger.debug("⏭️ Skipping AWS MCP enrichment: No blueprint available")
+        return state
+
+    try:
+        import os
+
+        # Check if AWS MCP is enabled
+        if os.getenv("CLOUDFORGE_DISABLE_AWS_MCP", "1") == "1":
+            logger.debug("⏭️ AWS MCP enrichment disabled (CLOUDFORGE_DISABLE_AWS_MCP=1)")
+            return state
+
+        # Extract services from blueprint
+        blueprint = state["blueprint"]
+        services = []
+
+        if isinstance(blueprint, dict) and "nodes" in blueprint:
+            services = [node.get("service_type") for node in blueprint["nodes"] if isinstance(node, dict)]
+
+        if not services:
+            logger.debug("⏭️ No services found in blueprint, skipping enrichment")
+            return state
+
+        logger.info(f"📚 Extracting best practices for: {', '.join(set(services))}")
+
+        # Consult AWS Documentation MCP
+        doc_client = get_aws_documentation_client()
+
+        if not doc_client.is_connected():
+            if not doc_client.connect():
+                logger.debug("ℹ️ AWS Documentation MCP not available (optional feature)")
+                return state
+
+        # Enrich with best practices
+        best_practices_list = []
+        unique_services = set(services)
+
+        for service in list(unique_services)[:3]:  # Limit to 3 services
+            try:
+                # Build query
+                query = f"best practices for {service} in cloud architecture"
+                result = doc_client.search_documentation(query)
+
+                if result and result.get("success"):
+                    practice = result.get("content", f"Best practices for {service}")
+                    best_practices_list.append(f"- {service}: {practice[:100]}...")
+                    logger.debug(f"✅ Got best practices for {service}")
+            except Exception as e:
+                logger.debug(f"⚠️ Could not get best practices for {service}: {str(e)}")
+                continue
+
+        # Enrich blueprint with best practices
+        if isinstance(blueprint, dict):
+            if "best_practices" not in blueprint:
+                blueprint["best_practices"] = []
+
+            blueprint["best_practices"].extend(best_practices_list)
+            state["blueprint"] = blueprint
+
+            if best_practices_list:
+                logger.info(f"✅ Enriched blueprint with {len(best_practices_list)} best practices")
+
+        doc_client.close()
+
+    except Exception as e:
+        logger.warning(f"⚠️ AWS MCP enrichment warning: {str(e)}")
+        # Don't fail the pipeline, just skip enrichment
+        pass
 
     return state
 
@@ -251,13 +335,15 @@ def build_pipeline_graph():
 
     # Add nodes
     graph.add_node("blueprint", blueprint_node)
+    graph.add_node("enrich_mcp", enrich_mcp_node)
     graph.add_node("coder", coder_node)
     graph.add_node("validator", validator_node)
     graph.add_node("generator", generator_node)
 
-    # Add edges
+    # Add edges (blueprint → enrich_mcp → coder → validator → generator)
     graph.add_edge(START, "blueprint")
-    graph.add_edge("blueprint", "coder")
+    graph.add_edge("blueprint", "enrich_mcp")
+    graph.add_edge("enrich_mcp", "coder")
     graph.add_edge("coder", "validator")
     graph.add_edge("validator", "generator")
     graph.add_edge("generator", END)

@@ -535,4 +535,13 @@ FINAL CHECKLIST BEFORE RETURNING CODE:
             conn_type = rel.get("connection_type", "default")
             text += f"- {rel['source']} >> {rel['destination']} [{conn_type}]\n"
 
+        # Include AWS best practices if available (from AWS MCP enrichment)
+        best_practices = blueprint.get("best_practices", [])
+        if best_practices:
+            text += "\n🎯 AWS BEST PRACTICES TO APPLY:\n"
+            text += "Ensure the generated code follows these recommendations:\n"
+            for practice in best_practices:
+                text += f"  {practice}\n"
+            text += "\n"
+
         return text
