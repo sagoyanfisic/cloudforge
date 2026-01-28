@@ -113,18 +113,47 @@ OUTPUT FORMAT (JSON):
     {{"name": "Lambda", "variable": "lambda_func", "service_type": "Lambda", "region": "us-east-1"}}
   ],
   "relationships": [
-    {{"source": "api_gw", "destination": "lambda_func", "connection_type": "default"}}
+    {{"source": "api_gw", "destination": "lambda_func", "connection_type": "triggers"}}
   ],
-  "metadata": {{"pattern": "serverless", "services_count": 2}}
+  "metadata": {{
+    "pattern": "serverless",
+    "services_count": 2,
+    "environment": "production",
+    "service_categories": ["Network", "Compute", "Database"]
+  }}
 }}
+
+CONNECTION TYPES (use these for relationships):
+- "triggers": Event-driven (API calls, Lambda invocations)
+- "reads_writes": Database access
+- "pulls": Data retrieval (ECR → EKS, S3 → instances)
+- "forwards": Load balancing / traffic
+- "manages": Control plane / configuration
+- "monitors": Observability / logging
+
+ENVIRONMENT DETECTION:
+- Look for keywords: prod, production, staging, dev, development, sandbox
+- Default to "production" if not specified
+- Add to metadata: "environment": "production|staging|development|sandbox"
+
+CATEGORIZE SERVICES:
+- Network: APIGateway, ALB, NLB, CloudFront, Route53, VPC
+- Compute: Lambda, EC2, ECS, EKS, Batch
+- Database: RDS, DynamoDB, ElastiCache, Redshift
+- Storage: S3, EBS, EFS
+- Integration: SQS, SNS, Kinesis
+- Monitoring: CloudWatch, CloudTrail
+- Security: IAM, KMS, Secrets Manager
 
 RULES:
 1. Extract ALL AWS services mentioned
 2. Create logical variable names (snake_case)
 3. Map to correct service types
-4. Include all relationships
+4. Use specific connection_type for relationships (not "default")
 5. Return valid JSON
-6. Do NOT include abstract concepts (VPC, Subnet, SecurityGroup) as nodes - save for Clusters in code generation
+6. Detect environment and add to metadata
+7. Categorize services and list in metadata
+8. Do NOT include abstract concepts as nodes (VPC, Subnet, SecurityGroup) - they become Clusters in visualization
 """
 
         self.prompt = ChatPromptTemplate.from_messages([
@@ -200,62 +229,130 @@ class DiagramCoderChain:
             wait_exponential_jitter=True,
         )
 
-        self.system_prompt = """You are CloudForge Diagram Coder. Generate Python diagrams code ONLY.
+        self.system_prompt = """You are CloudForge Diagram Coder. Generate professional Python diagrams code ONLY.
 
+═══════════════════════════════════════════════════════════════════════════════
 CRITICAL RULES - MUST FOLLOW EXACTLY:
-1. **EVERY STRING MUST HAVE BOTH OPENING AND CLOSING QUOTES** - Never truncate strings, always complete them
+═══════════════════════════════════════════════════════════════════════════════
+
+1. **STRING INTEGRITY** - EVERY STRING MUST BE COMPLETE
    - CORRECT: Lambda("Lambda Function")
    - WRONG: Lambda("Lambda Func  ← Missing closing quote!
-2. **EVERY PARENTHESIS MUST BE CLOSED**
+
+2. **PARENTHESIS BALANCE** - EVERY ( MUST HAVE MATCHING )
    - CORRECT: APIGateway("API")
    - WRONG: APIGateway("API"  ← Missing closing parenthesis!
-3. **RETURN ONLY VALID PYTHON CODE** - No explanations, no markdown, no code blocks, no comments
-4. **Each node creation MUST be on ONE LINE** - Do not split across lines
-5. **Connections (>>) ONLY between individual nodes, NEVER between Clusters**
-6. **Nodes inside Cluster MUST be indented under "with Cluster(...):"**
 
-IMPORT MAPPING (ONLY from these):
-- compute: from diagrams.aws.compute import Lambda, EC2, ECS, Batch
-- database: from diagrams.aws.database import RDS, ElastiCache, Redshift
-- network: from diagrams.aws.network import APIGateway, ALB, NLB, NATGateway, Route53
-- storage: from diagrams.aws.storage import S3, EBS, EFS
-- integration: from diagrams.aws.integration import SQS, SNS
-- analytics: from diagrams.aws.analytics import Kinesis
+3. **RETURN ONLY VALID PYTHON CODE** - No explanations, markdown, code blocks, or comments
 
-VALID CLASSES TO USE:
-Lambda, EC2, ECS, Batch, RDS, ElastiCache, Redshift, S3, EBS, EFS, APIGateway, ALB, NLB, NATGateway, Route53, SQS, SNS, Kinesis
+4. **ONE LINE PER NODE** - Never split node creation across lines
+
+5. **NO CLUSTER-TO-CLUSTER CONNECTIONS** - Only node >> node, never Cluster >> Cluster
+
+6. **PROPER INDENTATION** - Nodes inside Cluster MUST be indented
+
+═══════════════════════════════════════════════════════════════════════════════
+VISUAL ORGANIZATION RULES:
+═══════════════════════════════════════════════════════════════════════════════
+
+ORGANIZE CLUSTERS BY SERVICE CATEGORY:
+- Compute: Lambda, EC2, ECS, Batch
+- Database: RDS, ElastiCache, Redshift
+- Storage: S3, EBS, EFS
+- Network: APIGateway, ALB, NLB, Route53, NATGateway
+- Integration: SQS, SNS, Kinesis
+- External: Users, GitHub, Third-party services
+
+ADD COLORS FOR ENVIRONMENTS:
+- Production: "#E74C3C" (Red)
+- Staging: "#F39C12" (Orange)
+- Development: "#3498DB" (Blue)
+- Management: "#27AE60" (Green)
+- Monitoring: "#95A5A6" (Gray)
+- Security: "#C0392B" (Dark Red)
+
+USE EDGE LABELS FOR CONNECTION TYPES:
+- "Triggers" for events
+- "Pulls/Pushes" for data movement
+- "Reads/Writes" for database access
+- "Manages" for control plane
+- "Monitors" for observability
+- "Forwards" for traffic
+
+CLUSTER BACKGROUND COLOR:
+- Use graph_attr={{"bgcolor": "COLOR#10"}} to add background tint
+- Example: graph_attr={{"bgcolor": "#E74C3C10"}} for light red background
+
+═══════════════════════════════════════════════════════════════════════════════
+IMPORT MAPPING (ONLY from these modules):
+═══════════════════════════════════════════════════════════════════════════════
+
+from diagrams import Diagram, Cluster, Edge
+from diagrams.aws.compute import Lambda, EC2, ECS, Batch
+from diagrams.aws.database import RDS, ElastiCache, Redshift
+from diagrams.aws.network import APIGateway, ALB, NLB, NATGateway, Route53
+from diagrams.aws.storage import S3, EBS, EFS
+from diagrams.aws.integration import SQS, SNS
+from diagrams.aws.analytics import Kinesis
+from diagrams.aws.general import Users
+from diagrams.onprem.vcs import Github
+
+VALID CLASSES: Lambda, EC2, ECS, Batch, RDS, ElastiCache, Redshift, S3, EBS, EFS, APIGateway, ALB, NLB, NATGateway, Route53, SQS, SNS, Kinesis, Users, Github
 
 DO NOT IMPORT (use as Cluster labels only):
 DynamoDB, CloudWatch, CloudTrail, VPC, Subnet, SecurityGroup, RDSProxy
 
-EXAMPLE - CORRECT:
+═══════════════════════════════════════════════════════════════════════════════
+PROFESSIONAL EXAMPLE WITH COLORS, CLUSTERS, AND EDGE LABELS:
+═══════════════════════════════════════════════════════════════════════════════
+
 import os
-from diagrams import Diagram, Cluster
+from diagrams import Diagram, Cluster, Edge
 from diagrams.aws.compute import Lambda
 from diagrams.aws.network import APIGateway
 from diagrams.aws.database import RDS
+from diagrams.aws.storage import S3
+from diagrams.aws.general import Users
 
 os.makedirs("output", exist_ok=True)
 
-with Diagram("Serverless API", show=False, filename="output/diagram", direction="TB"):
-    api = APIGateway("API Gateway")
-    with Cluster("Compute"):
-        func = Lambda("Lambda Function")
-    with Cluster("Data"):
-        db = RDS("PostgreSQL")
-    with Cluster("Storage"):
-        s3 = S3("S3 Bucket")
-    api >> func >> db
-    func >> s3
+COLOR_PROD = "#E74C3C"
+COLOR_COMPUTE = "#3498DB"
+COLOR_DATABASE = "#27AE60"
+COLOR_STORAGE = "#F39C12"
 
-CRITICAL CHECKLIST BEFORE RETURNING CODE:
-☑ Every opening quote has closing quote on SAME LINE
-☑ Every opening parenthesis has closing parenthesis
-☑ All node definitions are complete: variable = Service("Label")
-☑ No lines are cut off or incomplete
-☑ All imports exist at top of file
-☑ Connections only between nodes (var1 >> var2), never between Clusters
-☑ No explanations, only Python code
+with Diagram("Production API", show=False, filename="output/diagram", direction="TB"):
+    users = Users("End Users")
+
+    api = APIGateway("API Gateway")
+
+    with Cluster("Compute", graph_attr={{"bgcolor": "{{COLOR_COMPUTE}}10"}}):
+        func = Lambda("Processing")
+
+    with Cluster("Data Layer", graph_attr={{"bgcolor": "{{COLOR_DATABASE}}10"}}):
+        db = RDS("PostgreSQL")
+
+    with Cluster("Static Assets", graph_attr={{"bgcolor": "{{COLOR_STORAGE}}10"}}):
+        storage = S3("S3 Bucket")
+
+    users >> Edge(label="Requests") >> api
+    api >> Edge(label="Triggers") >> func
+    func >> Edge(label="Reads/Writes") >> db
+    func >> Edge(label="Stores") >> storage
+
+═══════════════════════════════════════════════════════════════════════════════
+FINAL CHECKLIST BEFORE RETURNING CODE:
+═══════════════════════════════════════════════════════════════════════════════
+
+✓ Every opening quote has closing quote on SAME LINE
+✓ Every opening parenthesis has closing parenthesis
+✓ All node definitions complete: variable = Service("Label")
+✓ No lines cut off or incomplete
+✓ All imports exist at top of file
+✓ Connections only between nodes (var1 >> var2), never Cluster >> Cluster
+✓ Edge labels describe connection purpose
+✓ Clusters have meaningful names and colors
+✓ Return ONLY valid Python code, NO explanations
 """
 
     def invoke(self, blueprint: dict[str, Any]) -> str:
@@ -302,6 +399,40 @@ CRITICAL CHECKLIST BEFORE RETURNING CODE:
         except Exception as e:
             logger.error(f"❌ Code generation failed: {str(e)}")
             raise ValueError(f"Code generation failed: {str(e)}")
+
+    def _generate_color_hints(self, environment: str) -> str:
+        """Generate color palette recommendations based on environment.
+
+        Args:
+            environment: Target environment (production, staging, development, sandbox)
+
+        Returns:
+            String with color definitions for code generation
+        """
+        # Primary environment color
+        env_colors = {
+            "production": "#E74C3C",      # Red
+            "prod": "#E74C3C",
+            "staging": "#F39C12",         # Orange
+            "development": "#3498DB",     # Blue
+            "dev": "#3498DB",
+            "sandbox": "#9B59B6",         # Purple
+        }
+
+        primary_color = env_colors.get(environment.lower(), "#E74C3C")
+
+        # Note: Colors are formatted as plain text (not as f-string) to avoid template variable interpretation
+        colors = ("# Environment: " + environment + "\n"
+                 'COLOR_PRIMARY = "' + primary_color + '"        # Primary environment color\n'
+                 'COLOR_COMPUTE = "#3498DB"              # Blue - Compute services\n'
+                 'COLOR_DATABASE = "#27AE60"             # Green - Database services\n'
+                 'COLOR_STORAGE = "#F39C12"              # Orange - Storage services\n'
+                 'COLOR_NETWORK = "#E74C3C"              # Red - Network services\n'
+                 'COLOR_SECURITY = "#C0392B"             # Dark Red - Security services\n'
+                 'COLOR_MONITORING = "#95A5A6"           # Gray - Monitoring services\n'
+                 'COLOR_INTEGRATION = "#16A085"          # Teal - Integration services')
+
+        return colors
 
     def _validate_generated_code(self, code: str) -> None:
         """Validate generated code for common issues.
@@ -379,16 +510,29 @@ CRITICAL CHECKLIST BEFORE RETURNING CODE:
                     )
 
     def _format_blueprint(self, blueprint: dict[str, Any]) -> str:
-        """Format blueprint as text for prompt"""
+        """Format blueprint as text for prompt with environment and categorization info"""
         text = f"Title: {blueprint.get('title', 'Diagram')}\n"
         text += f"Description: {blueprint.get('description', '')}\n\n"
 
-        text += "Services:\n"
+        # Include metadata for visual organization
+        metadata = blueprint.get("metadata", {})
+        if metadata:
+            environment = metadata.get("environment", "production")
+            categories = metadata.get("service_categories", [])
+            text += f"Environment: {environment}\n"
+            if categories:
+                text += f"Service Categories: {', '.join(categories)}\n"
+            text += "\n"
+
+        # Services with categorization hint
+        text += "Services (organize into Clusters by category):\n"
         for node in blueprint.get("nodes", []):
             text += f"- {node['name']} ({node['service_type']})\n"
 
-        text += "\nConnections:\n"
+        # Connections with types
+        text += "\nConnections (use appropriate Edge labels):\n"
         for rel in blueprint.get("relationships", []):
-            text += f"- {rel['source']} >> {rel['destination']}\n"
+            conn_type = rel.get("connection_type", "default")
+            text += f"- {rel['source']} >> {rel['destination']} [{conn_type}]\n"
 
         return text
