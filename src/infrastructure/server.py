@@ -69,7 +69,7 @@ def generate_diagram(
                 }
 
         # Generate diagram
-        output_files = generator.generate(code, name, settings.output_formats)
+        output_files = generator.generate(code, name, settings.output_formats_list)
 
         if not output_files:
             return {

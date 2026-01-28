@@ -1,15 +1,19 @@
-"""Infrastructure Layer - Detalles técnicos
+"""Infrastructure Layer - Technical implementation details.
 
-Implementación de persistencia, validación, generación, configuración.
-Desacoplado del domain y application.
+Persistence, validation, generation, configuration, and NLP pipeline.
+Decoupled from domain and application layers.
 """
 
+from .config import settings
+from .validator import DiagramValidator
+from .generator import DiagramGenerator
+from .storage import DiagramStorage
+from .nlp import NaturalLanguageProcessor
+
 __all__ = [
-    "config",
-    "validator",
-    "generator",
-    "storage",
-    "natural_language",
-    "mcp_client",
-    "server",
+    "settings",
+    "DiagramValidator",
+    "DiagramGenerator",
+    "DiagramStorage",
+    "NaturalLanguageProcessor",
 ]

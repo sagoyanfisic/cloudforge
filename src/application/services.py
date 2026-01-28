@@ -61,10 +61,9 @@ class DiagramRepositoryImpl(DiagramRepository):
         """Guardar diagrama"""
         try:
             self.storage.save_diagram(
-                diagram.diagram_id,
-                diagram.metadata,
-                diagram.code,
-                diagram.file_paths,
+                code=diagram.code,
+                metadata=diagram.metadata,
+                output_files=diagram.file_paths,
             )
             return True
         except Exception as e:
@@ -188,7 +187,7 @@ class DiagramGenerationService:
 
             # 2. Generar diagramas
             output_files = self.generator.generate(
-                code, diagram_name, settings.output_formats
+                code, diagram_name, settings.output_formats_list
             )
 
             if not output_files:

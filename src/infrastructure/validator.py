@@ -2,7 +2,6 @@
 
 import ast
 import re
-from typing import Any
 from ..domain.models import ValidationError, DiagramValidation
 from .config import settings
 
@@ -53,12 +52,12 @@ class DiagramValidator:
         errors.extend(syntax_errors)
 
         # Component validation
-        component_errors, component_count = self._validate_components(code)
-        errors.extend(component_errors)
+        component_warnings, component_count = self._validate_components(code)
+        warnings.extend(component_warnings)
 
         # Security validation
-        security_warnings = self._validate_security(code)
-        warnings.extend(security_warnings)
+        security_errors = self._validate_security(code)
+        errors.extend(security_errors)
 
         # Size validation
         if component_count > settings.max_components:
@@ -149,29 +148,29 @@ class DiagramValidator:
         return len(re.findall(r">>", code))
 
     def _validate_security(self, code: str) -> list[ValidationError]:
-        """Validate security concerns"""
-        warnings: list[ValidationError] = []
+        """Validate security concerns - blocks dangerous code"""
+        security_errors: list[ValidationError] = []
 
         # Check for exec, eval, or other dangerous functions
         dangerous_functions = ["exec", "eval", "__import__"]
         for func in dangerous_functions:
-            if func in code:
-                warnings.append(
+            if re.search(rf"\b{func}\s*\(", code):
+                security_errors.append(
                     ValidationError(
                         field="security",
                         message=f"Dangerous function detected: {func}",
-                        severity="warning",
+                        severity="error",
                     )
                 )
 
         # Check for file operations
         if re.search(r"\bopen\s*\(", code):
-            warnings.append(
+            security_errors.append(
                 ValidationError(
                     field="security",
                     message="File operations detected in diagram code",
-                    severity="warning",
+                    severity="error",
                 )
             )
 
-        return warnings
+        return security_errors

@@ -66,26 +66,25 @@ def blueprint_node(state: DiagramPipelineState) -> DiagramPipelineState:
     """
     logger.info("📋 Node: Blueprint Generation")
 
-    try:
-        chain = BlueprintArchitectChain()
-        blueprint = chain.invoke(state["description"])
+    last_error = None
+    while state["retry_count"] <= state["max_retries"]:
+        try:
+            chain = BlueprintArchitectChain()
+            blueprint = chain.invoke(state["description"])
 
-        state["blueprint"] = blueprint
-        logger.info(f"✅ Blueprint generated: {len(blueprint.get('nodes', []))} nodes")
+            state["blueprint"] = blueprint
+            logger.info(f"✅ Blueprint generated: {len(blueprint.get('nodes', []))} nodes")
+            return state
 
-    except Exception as e:
-        error_msg = f"Blueprint generation failed: {str(e)}"
-        logger.error(f"❌ {error_msg}")
-        state["errors"].append(error_msg)
-
-        if state["retry_count"] < state["max_retries"]:
+        except Exception as e:
+            last_error = e
+            error_msg = f"Blueprint generation failed: {str(e)}"
+            logger.error(f"❌ {error_msg}")
+            state["errors"].append(error_msg)
             state["retry_count"] += 1
             logger.info(f"🔄 Retrying... (attempt {state['retry_count']}/{state['max_retries']})")
-            return blueprint_node(state)  # Retry
-        else:
-            raise ValueError(f"Blueprint generation failed after {state['max_retries']} retries")
 
-    return state
+    raise ValueError(f"Blueprint generation failed after {state['max_retries']} retries: {last_error}")
 
 
 def enrich_mcp_node(state: DiagramPipelineState) -> DiagramPipelineState:
@@ -188,26 +187,25 @@ def coder_node(state: DiagramPipelineState) -> DiagramPipelineState:
         state["errors"].append(error_msg)
         raise ValueError(error_msg)
 
-    try:
-        chain = DiagramCoderChain()
-        code = chain.invoke(state["blueprint"])
+    last_error = None
+    while state["retry_count"] <= state["max_retries"]:
+        try:
+            chain = DiagramCoderChain()
+            code = chain.invoke(state["blueprint"])
 
-        state["code"] = code
-        logger.info(f"✅ Code generated: {len(code)} characters")
+            state["code"] = code
+            logger.info(f"✅ Code generated: {len(code)} characters")
+            return state
 
-    except Exception as e:
-        error_msg = f"Code generation failed: {str(e)}"
-        logger.error(f"❌ {error_msg}")
-        state["errors"].append(error_msg)
-
-        if state["retry_count"] < state["max_retries"]:
+        except Exception as e:
+            last_error = e
+            error_msg = f"Code generation failed: {str(e)}"
+            logger.error(f"❌ {error_msg}")
+            state["errors"].append(error_msg)
             state["retry_count"] += 1
             logger.info(f"🔄 Retrying... (attempt {state['retry_count']}/{state['max_retries']})")
-            return coder_node(state)  # Retry
-        else:
-            raise ValueError(f"Code generation failed after {state['max_retries']} retries")
 
-    return state
+    raise ValueError(f"Code generation failed after {state['max_retries']} retries: {last_error}")
 
 
 def validator_node(state: DiagramPipelineState) -> DiagramPipelineState:
@@ -273,48 +271,29 @@ def generator_node(state: DiagramPipelineState) -> DiagramPipelineState:
         state["errors"].append(error_msg)
         raise ValueError(error_msg)
 
-    try:
-        generator = DiagramGenerator()
-        output_files = generator.generate(
-            state["code"],
-            state["diagram_name"],
-            ["png", "pdf", "svg"],
-        )
+    last_error = None
+    while state["retry_count"] <= state["max_retries"]:
+        try:
+            generator = DiagramGenerator()
+            output_files = generator.generate(
+                state["code"],
+                state["diagram_name"],
+                ["png", "pdf", "svg"],
+            )
 
-        state["output_files"] = output_files
-        logger.info(f"✅ Diagram generated: {len(output_files)} formats")
+            state["output_files"] = output_files
+            logger.info(f"✅ Diagram generated: {len(output_files)} formats")
+            return state
 
-    except Exception as e:
-        error_msg = f"Diagram generation failed: {str(e)}"
-        logger.error(f"❌ {error_msg}")
-        state["errors"].append(error_msg)
-
-        if state["retry_count"] < state["max_retries"]:
+        except Exception as e:
+            last_error = e
+            error_msg = f"Diagram generation failed: {str(e)}"
+            logger.error(f"❌ {error_msg}")
+            state["errors"].append(error_msg)
             state["retry_count"] += 1
             logger.info(f"🔄 Retrying... (attempt {state['retry_count']}/{state['max_retries']})")
-            return generator_node(state)
-        else:
-            raise ValueError(f"Diagram generation failed after {state['max_retries']} retries")
 
-    return state
-
-
-# ============================================================================
-# Conditional Edge Functions
-# ============================================================================
-
-
-def should_retry_blueprint(state: DiagramPipelineState) -> str:
-    """Check if blueprint generation should retry"""
-    if not state.get("blueprint") and state["retry_count"] < state["max_retries"]:
-        return "blueprint"
-    return "coder"
-
-
-def should_continue_on_validation_error(state: DiagramPipelineState) -> str:
-    """Check if generation should continue despite validation errors"""
-    # Continue anyway - we have code that might work
-    return "generator"
+    raise ValueError(f"Diagram generation failed after {state['max_retries']} retries: {last_error}")
 
 
 # ============================================================================

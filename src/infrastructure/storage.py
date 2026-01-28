@@ -3,7 +3,7 @@
 import json
 import hashlib
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 from ..domain.models import StoredDiagram, DiagramMetadata
@@ -55,7 +55,7 @@ class DiagramStorage:
                 total_size += output_file.stat().st_size
 
         # Save metadata
-        metadata.updated_at = datetime.utcnow()
+        metadata.updated_at = datetime.now(timezone.utc)
         metadata_file = self.metadata_path / f"{diagram_id}.json"
         metadata_file.write_text(
             metadata.model_dump_json(indent=2),
@@ -104,7 +104,7 @@ class DiagramStorage:
         file_paths: dict[str, str] = {}
         total_size = 0
 
-        for format_type in settings.output_formats:
+        for format_type in settings.output_formats_list:
             output_file = self.diagrams_path / f"{diagram_id}.{format_type}"
             if output_file.exists():
                 file_paths[format_type] = str(output_file)
@@ -150,7 +150,7 @@ class DiagramStorage:
         if code_file.exists():
             code_file.unlink()
 
-        for format_type in settings.output_formats:
+        for format_type in settings.output_formats_list:
             output_file = self.diagrams_path / f"{diagram_id}.{format_type}"
             if output_file.exists():
                 output_file.unlink()
