@@ -16,25 +16,49 @@ class Settings(BaseSettings):
     """Application settings"""
 
     model_config = SettingsConfigDict(
-        env_prefix="AWS_DIAGRAM_",
         case_sensitive=False,
         extra="ignore",  # Ignore extra environment variables
+        populate_by_name=True,  # Allow both field name and alias
     )
 
+    # Google API Configuration
+    google_api_key: Optional[str] = None
+
     # Storage settings
-    diagrams_storage_path: Path = Path.home() / ".aws_diagrams"
-    max_diagram_size_mb: int = 50
+    diagrams_storage_path: Path = Field(
+        default=Path.home() / ".aws_diagrams",
+        alias="AWS_DIAGRAM_DIAGRAMS_STORAGE_PATH"
+    )
+    max_diagram_size_mb: int = Field(
+        default=50,
+        alias="AWS_DIAGRAM_MAX_DIAGRAM_SIZE_MB"
+    )
 
     # Output formats - simple string, NOT parsed as JSON
-    output_formats: str = "png,pdf,svg"
+    output_formats: str = Field(
+        default="png,pdf,svg",
+        alias="AWS_DIAGRAM_OUTPUT_FORMATS"
+    )
 
     # Validation settings
-    enable_validation: bool = True
-    max_components: int = 100
-    max_relationships: int = 200
+    enable_validation: bool = Field(
+        default=True,
+        alias="AWS_DIAGRAM_ENABLE_VALIDATION"
+    )
+    max_components: int = Field(
+        default=100,
+        alias="AWS_DIAGRAM_MAX_COMPONENTS"
+    )
+    max_relationships: int = Field(
+        default=200,
+        alias="AWS_DIAGRAM_MAX_RELATIONSHIPS"
+    )
 
     # Logging
-    log_level: str = "INFO"
+    log_level: str = Field(
+        default="INFO",
+        alias="AWS_DIAGRAM_LOG_LEVEL"
+    )
 
     def __init__(self, **data: dict) -> None:
         super().__init__(**data)
