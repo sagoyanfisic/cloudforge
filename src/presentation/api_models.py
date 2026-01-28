@@ -42,7 +42,7 @@ class GenerateResponse(BaseModel):
 
     success: bool = Field(..., description="Whether generation was successful")
     message: str = Field(..., description="Status message")
-    blueprint: Optional[str] = Field(
+    blueprint: Optional[dict[str, Any]] = Field(
         None, description="Technical blueprint generated from description"
     )
     code: Optional[str] = Field(None, description="Generated Python code")
@@ -83,7 +83,7 @@ class DiagramDetailResponse(BaseModel):
     id: Optional[str] = Field(None, description="Diagram ID")
     name: Optional[str] = Field(None, description="Diagram name")
     code: Optional[str] = Field(None, description="Python source code")
-    blueprint: Optional[str] = Field(None, description="Technical blueprint")
+    blueprint: Optional[dict[str, Any]] = Field(None, description="Technical blueprint")
     validation: Optional[ValidationResponse] = Field(
         None, description="Validation results"
     )
