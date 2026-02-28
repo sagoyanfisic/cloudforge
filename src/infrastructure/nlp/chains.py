@@ -166,7 +166,7 @@ class BlueprintArchitectChain:
             model="gemini-2.5-flash",
             google_api_key=api_key,
             temperature=0.05,
-            max_output_tokens=8000,
+            max_output_tokens=10000,
         ).with_retry(stop_after_attempt=3, wait_exponential_jitter=True)
 
         self._system_prompt = _load_chain_prompt("blueprint.md")
@@ -230,7 +230,7 @@ class DiagramCoderChain:
             model="gemini-2.5-flash",
             google_api_key=api_key,
             temperature=0.05,
-            max_output_tokens=8000,
+            max_output_tokens=10000,
         ).with_retry(stop_after_attempt=3, wait_exponential_jitter=True)
 
         self._system_prompt = _load_chain_prompt("coder.md")
