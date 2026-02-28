@@ -300,6 +300,10 @@ class DiagramCoderChain:
             r'OpenSearch\(': 'AmazonOpensearchService(',
             r'Elasticsearch\(': 'ElasticsearchService(',
             r'DynamoDB\(': 'DynamodbTable(',
+            # Network services
+            r'VPCEndpoint\(': 'Endpoint(',  # diagrams.aws.network has Endpoint, not VPCEndpoint
+            # Integration/Messaging services
+            r'\bEventBridge\(': 'Eventbridge(',  # diagrams has Eventbridge (lowercase b), not EventBridge
             # Monitoring/Observability
             r'CloudWatch\(': 'Cloudwatch(',
             r'X-Ray\(': 'XRay(',

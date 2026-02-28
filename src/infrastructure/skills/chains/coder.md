@@ -180,7 +180,7 @@ AVAILABLE AWS SYMBOLS — USE EXACT CLASS NAMES (all pre-imported):
 - Route53
 - NATGateway
 - CloudFront
-- VPCEndpoint
+- Endpoint (for VPC endpoints)
 
 **INTEGRATION:**
 - SQS
@@ -189,7 +189,7 @@ AVAILABLE AWS SYMBOLS — USE EXACT CLASS NAMES (all pre-imported):
 - KinesisDataStreams
 - KinesisDataFirehose
 - KinesisDataAnalytics
-- EventBridge
+- Eventbridge (not EventBridge — note lowercase 'b')
 - MQ
 - ManagedStreamingForKafka
 
@@ -239,7 +239,9 @@ When the blueprint specifies a service, map it to the correct diagrams symbol:
 | Redis | ElastiCache |
 | Memcached | Elasticache |
 | Kinesis | KinesisDataStreams |
-| EventBridge | EventBridge |
+| EventBridge | Eventbridge |
+| VPC Endpoint | Endpoint |
+| VPCEndpoint | Endpoint |
 | Secrets Manager | SecretsManager |
 | Secrets | SecretsManager |
 | Certificate Manager | ACM |
@@ -305,6 +307,8 @@ CRITICAL VALIDATION RULES BEFORE RETURNING CODE:
 - CloudWatch ← FORBIDDEN (use Cloudwatch)
 - X-Ray ← FORBIDDEN (use XRay)
 - DynamoDB ← FORBIDDEN (use DynamodbTable)
+- EventBridge ← FORBIDDEN (use Eventbridge with lowercase 'b')
+- VPCEndpoint ← FORBIDDEN (use Endpoint)
 
 ✅ REQUIRED REPLACEMENTS before returning:
 1. Search code for "OpenSearch(" and replace with "AmazonOpensearchService("
@@ -312,6 +316,8 @@ CRITICAL VALIDATION RULES BEFORE RETURNING CODE:
 3. Search code for "CloudWatch(" and replace with "Cloudwatch("
 4. Search code for "X-Ray(" and replace with "XRay("
 5. Search code for "DynamoDB(" and replace with "DynamodbTable("
+6. Search code for "EventBridge(" and replace with "Eventbridge("
+7. Search code for "VPCEndpoint(" and replace with "Endpoint("
 
 ═══════════════════════════════════════════════════════════════════════════════
 FINAL CHECKLIST:
@@ -324,8 +330,10 @@ FINAL CHECKLIST:
 ✓ Subnet clusters nested inside VPC cluster
 ✓ Connections only between node variables, not Cluster objects
 ✓ Service names match the AWS Services list exactly (CamelCase)
-✓ NO FORBIDDEN NAMES in code (OpenSearch, Elasticsearch, CloudWatch, X-Ray, DynamoDB)
+✓ NO FORBIDDEN NAMES in code (OpenSearch, Elasticsearch, CloudWatch, X-Ray, DynamoDB, EventBridge, VPCEndpoint)
 ✓ ALL replacements applied from CRITICAL VALIDATION RULES above
+✓ Eventbridge is lowercase 'b', not EventBridge
+✓ VPCEndpoint is mapped to Endpoint, not VPCEndpoint
 ✓ Used mapping guide for any non-standard service names
 ✓ Edge labels describe the purpose of each connection
 ✓ Environment color applied to the top-level Diagram or relevant Clusters
