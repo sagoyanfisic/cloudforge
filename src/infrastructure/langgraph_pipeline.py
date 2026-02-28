@@ -14,7 +14,7 @@ from datetime import datetime
 from langgraph.graph import StateGraph, START, END
 from pydantic import BaseModel, Field
 
-from .langchain_chains import BlueprintArchitectChain, DiagramCoderChain
+from .nlp.chains import BlueprintArchitectChain, DiagramCoderChain
 from ..infrastructure.validator import DiagramValidator
 from ..infrastructure.generator import DiagramGenerator
 from .aws_mcp_client import get_aws_documentation_client
@@ -255,13 +255,13 @@ def validator_node(state: DiagramPipelineState) -> DiagramPipelineState:
 
 
 def generator_node(state: DiagramPipelineState) -> DiagramPipelineState:
-    """Generate diagram from code
+    """Generate diagram from code with fallback to code regeneration
 
     Args:
         state: Current pipeline state
 
     Returns:
-        Updated state with output files
+        Updated state with output files or signal to retry code generation
     """
     logger.info("🎨 Node: Diagram Generation")
 
@@ -271,8 +271,12 @@ def generator_node(state: DiagramPipelineState) -> DiagramPipelineState:
         state["errors"].append(error_msg)
         raise ValueError(error_msg)
 
+    # Reset retry count for diagram generation attempts
+    diagram_attempt = 0
     last_error = None
-    while state["retry_count"] <= state["max_retries"]:
+    max_diagram_attempts = 3
+
+    while diagram_attempt < max_diagram_attempts:
         try:
             generator = DiagramGenerator()
             output_files = generator.generate(
@@ -283,17 +287,31 @@ def generator_node(state: DiagramPipelineState) -> DiagramPipelineState:
 
             state["output_files"] = output_files
             logger.info(f"✅ Diagram generated: {len(output_files)} formats")
+            state["retry_count"] = 0  # Reset on success
             return state
 
         except Exception as e:
             last_error = e
-            error_msg = f"Diagram generation failed: {str(e)}"
+            diagram_attempt += 1
+            error_msg = f"Diagram generation attempt {diagram_attempt}/3 failed: {str(e)}"
             logger.error(f"❌ {error_msg}")
             state["errors"].append(error_msg)
-            state["retry_count"] += 1
-            logger.info(f"🔄 Retrying... (attempt {state['retry_count']}/{state['max_retries']})")
 
-    raise ValueError(f"Diagram generation failed after {state['max_retries']} retries: {last_error}")
+            if diagram_attempt < max_diagram_attempts:
+                logger.info(f"🔄 Retrying diagram generation... (attempt {diagram_attempt}/{max_diagram_attempts})")
+            else:
+                # All diagram generation attempts failed, try regenerating code
+                logger.warning(f"⚠️ All {max_diagram_attempts} diagram generation attempts failed")
+                logger.info(f"🔄 Will regenerate code (attempt {state['retry_count'] + 1}/{state['max_retries']})")
+                state["retry_count"] += 1
+
+                # If we haven't exceeded max retries, signal to regenerate code
+                if state["retry_count"] <= state["max_retries"]:
+                    state["code"] = None  # Clear code to force regeneration
+                    return state
+
+    # If we get here, we've exhausted all retries
+    raise ValueError(f"Diagram generation failed after {max_diagram_attempts} attempts with error: {last_error}")
 
 
 # ============================================================================
@@ -301,8 +319,30 @@ def generator_node(state: DiagramPipelineState) -> DiagramPipelineState:
 # ============================================================================
 
 
+def _should_retry_code_generation(state: DiagramPipelineState) -> str:
+    """Determine if we should retry code generation or end pipeline
+
+    Args:
+        state: Current pipeline state
+
+    Returns:
+        "coder" to retry code generation, "end" to finish
+    """
+    # If diagram generation cleared the code and we haven't exceeded retries, retry
+    if not state.get("code") and state["retry_count"] <= state["max_retries"]:
+        logger.info(f"📝 Regenerating code (global attempt {state['retry_count']}/{state['max_retries']})")
+        return "coder"
+
+    # Otherwise end
+    return "end"
+
+
 def build_pipeline_graph():
-    """Build the complete LangGraph pipeline
+    """Build the complete LangGraph pipeline with fallback to code regeneration
+
+    Pipeline flow:
+    - Normal success path: blueprint → enrich_mcp → coder → validator → generator → END
+    - Diagram generation fails: generator clears code → conditional edge → back to coder
 
     Returns:
         Compiled graph ready to invoke
@@ -320,13 +360,22 @@ def build_pipeline_graph():
     graph.add_node("generator", generator_node)
 
     # Add edges
-    # blueprint → enrich_mcp → coder → validator → generator
+    # Main flow: blueprint → enrich_mcp → coder → validator → generator
     graph.add_edge(START, "blueprint")
     graph.add_edge("blueprint", "enrich_mcp")
     graph.add_edge("enrich_mcp", "coder")
     graph.add_edge("coder", "validator")
     graph.add_edge("validator", "generator")
-    graph.add_edge("generator", END)
+
+    # Conditional edge from generator: retry code or end
+    graph.add_conditional_edges(
+        "generator",
+        _should_retry_code_generation,
+        {
+            "coder": "coder",  # Loop back to code generation
+            "end": END,         # End pipeline
+        }
+    )
 
     # Compile
     compiled_graph = graph.compile()

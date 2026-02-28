@@ -28,6 +28,14 @@ class RefineResponse(BaseModel):
     original: str = Field(..., description="Original input description")
     refined: str = Field(..., description="Refined and detailed description")
     message: str = Field(..., description="Status message")
+    patterns: list[str] = Field(
+        default_factory=list,
+        description="Detected AWS architecture patterns (e.g. 'RAG / Semantic Search')",
+    )
+    recommended_services: list[dict[str, str]] = Field(
+        default_factory=list,
+        description="AWS services recommended for the detected patterns [{service, role}]",
+    )
 
 
 class ValidationErrorResponse(BaseModel):

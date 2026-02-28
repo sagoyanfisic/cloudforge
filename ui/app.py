@@ -49,6 +49,10 @@ if "current_diagram" not in st.session_state:
     st.session_state.current_diagram = None
 if "step" not in st.session_state:
     st.session_state.step = "input"  # input → review → generated
+if "detected_patterns" not in st.session_state:
+    st.session_state.detected_patterns = []
+if "recommended_services" not in st.session_state:
+    st.session_state.recommended_services = []
 
 
 # ============================================================================
@@ -185,6 +189,8 @@ with tab1:
 
                         if refine_result.get("success"):
                             st.session_state.refined_description = refine_result.get("refined", "")
+                            st.session_state.detected_patterns = refine_result.get("patterns", [])
+                            st.session_state.recommended_services = refine_result.get("recommended_services", [])
                             st.session_state.step = "review"
                             st.rerun()
                         else:
@@ -211,6 +217,22 @@ with tab1:
 
         with st.expander("📋 Original Description", expanded=False):
             st.markdown(f"```\n{st.session_state.original_description}\n```")
+
+        # Show detected AWS patterns
+        if st.session_state.detected_patterns:
+            st.markdown("### 🎯 Detected AWS Architecture Patterns")
+            pattern_cols = st.columns(min(len(st.session_state.detected_patterns), 4))
+            for i, pattern in enumerate(st.session_state.detected_patterns):
+                with pattern_cols[i % len(pattern_cols)]:
+                    st.success(f"**{pattern}**")
+
+        if st.session_state.recommended_services:
+            with st.expander("🔧 Recommended AWS Services (from Pattern Analysis)", expanded=False):
+                svc_cols = st.columns(2)
+                for i, svc in enumerate(st.session_state.recommended_services):
+                    with svc_cols[i % 2]:
+                        st.markdown(f"**{svc.get('service', '')}**")
+                        st.caption(svc.get("role", ""))
 
         st.markdown("### 🔄 Refined Description (AI Enhanced)")
         st.markdown("*Includes data flows, layers, technical context, and AWS best practices*")
@@ -308,6 +330,8 @@ with tab1:
                 st.session_state.original_description = ""
                 st.session_state.refined_description = ""
                 st.session_state.current_diagram = None
+                st.session_state.detected_patterns = []
+                st.session_state.recommended_services = []
                 st.rerun()
 
         with col_export:

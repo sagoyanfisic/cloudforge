@@ -232,15 +232,17 @@ async def refine_description(request: RefineRequest) -> RefineResponse:
     logger.info("🔧 Refining description")
 
     try:
-        from ..infrastructure.langchain_chains import DescriptionRefinerChain
+        from ..infrastructure.nlp.chains import DescriptionRefinerChain
 
         refiner = DescriptionRefinerChain()
-        refined = refiner.invoke(request.description)
+        result = refiner.invoke(request.description)
 
         return RefineResponse(
             success=True,
             original=request.description,
-            refined=refined,
+            refined=result["refined"],
+            patterns=result.get("patterns", []),
+            recommended_services=result.get("recommended_services", []),
             message="Description refined successfully",
         )
 
