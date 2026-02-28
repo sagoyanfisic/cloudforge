@@ -152,6 +152,7 @@ AVAILABLE AWS SYMBOLS — USE EXACT CLASS NAMES (all pre-imported):
 - ECS
 - EKS
 - Batch
+- AutoScaling (not AutoScalingGroup — note singular)
 
 **DATABASE:**
 - RDS
@@ -242,6 +243,8 @@ When the blueprint specifies a service, map it to the correct diagrams symbol:
 | EventBridge | Eventbridge |
 | VPC Endpoint | Endpoint |
 | VPCEndpoint | Endpoint |
+| Auto Scaling Group | AutoScaling |
+| AutoScalingGroup | AutoScaling |
 | Secrets Manager | SecretsManager |
 | Secrets | SecretsManager |
 | Certificate Manager | ACM |
@@ -309,6 +312,7 @@ CRITICAL VALIDATION RULES BEFORE RETURNING CODE:
 - DynamoDB ← FORBIDDEN (use DynamodbTable)
 - EventBridge ← FORBIDDEN (use Eventbridge with lowercase 'b')
 - VPCEndpoint ← FORBIDDEN (use Endpoint)
+- AutoScalingGroup ← FORBIDDEN (use AutoScaling, not AutoScalingGroup)
 
 ✅ REQUIRED REPLACEMENTS before returning:
 1. Search code for "OpenSearch(" and replace with "AmazonOpensearchService("
@@ -318,6 +322,7 @@ CRITICAL VALIDATION RULES BEFORE RETURNING CODE:
 5. Search code for "DynamoDB(" and replace with "DynamodbTable("
 6. Search code for "EventBridge(" and replace with "Eventbridge("
 7. Search code for "VPCEndpoint(" and replace with "Endpoint("
+8. Search code for "AutoScalingGroup(" and replace with "AutoScaling("
 
 ═══════════════════════════════════════════════════════════════════════════════
 FINAL CHECKLIST:
@@ -330,10 +335,11 @@ FINAL CHECKLIST:
 ✓ Subnet clusters nested inside VPC cluster
 ✓ Connections only between node variables, not Cluster objects
 ✓ Service names match the AWS Services list exactly (CamelCase)
-✓ NO FORBIDDEN NAMES in code (OpenSearch, Elasticsearch, CloudWatch, X-Ray, DynamoDB, EventBridge, VPCEndpoint)
+✓ NO FORBIDDEN NAMES in code (OpenSearch, Elasticsearch, CloudWatch, X-Ray, DynamoDB, EventBridge, VPCEndpoint, AutoScalingGroup)
 ✓ ALL replacements applied from CRITICAL VALIDATION RULES above
 ✓ Eventbridge is lowercase 'b', not EventBridge
 ✓ VPCEndpoint is mapped to Endpoint, not VPCEndpoint
+✓ AutoScalingGroup is mapped to AutoScaling, not AutoScalingGroup
 ✓ Used mapping guide for any non-standard service names
 ✓ Edge labels describe the purpose of each connection
 ✓ Environment color applied to the top-level Diagram or relevant Clusters

@@ -304,6 +304,8 @@ class DiagramCoderChain:
             r'VPCEndpoint\(': 'Endpoint(',  # diagrams.aws.network has Endpoint, not VPCEndpoint
             # Integration/Messaging services
             r'\bEventBridge\(': 'Eventbridge(',  # diagrams has Eventbridge (lowercase b), not EventBridge
+            # Compute services
+            r'AutoScalingGroup\(': 'AutoScaling(',  # diagrams has AutoScaling, not AutoScalingGroup
             # Monitoring/Observability
             r'CloudWatch\(': 'Cloudwatch(',
             r'X-Ray\(': 'XRay(',
