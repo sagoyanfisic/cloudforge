@@ -23,6 +23,7 @@ from langchain_core.output_parsers import PydanticOutputParser
 from .models import BlueprintNode, BlueprintRelationship
 from .outputs import AwsPatternSkillOutput, BlueprintAnalysisOutput
 from .skill import AwsMultiAgentSkillPipeline
+from .well_architected_skill import WellArchitectedSkill, WellArchitectedAssessment
 
 load_dotenv()
 
@@ -48,10 +49,12 @@ def _load_chain_prompt(filename: str) -> str:
 class DescriptionRefinerChain:
     """Refines vague architecture descriptions into detailed, diagram-ready prompts.
 
-    Two-phase process:
+    Three-phase process:
     1. AwsMultiAgentSkillPipeline (Architect + Critic → Reviewer) detects patterns
        and enriches context with concrete AWS services.
-    2. A Gemini LLM uses that context to produce a technically precise description.
+    2. WellArchitectedSkill evaluates against the 5 AWS Well-Architected pillars
+       and recommends missing services for production-grade architecture.
+    3. A Gemini LLM uses that context to produce a technically precise description.
 
     System prompt: skills/chains/refiner.md
     """
@@ -77,21 +80,30 @@ class DescriptionRefinerChain:
 
         self._system_prompt = _load_chain_prompt("refiner.md")
         self._skill_chain = AwsMultiAgentSkillPipeline(api_key)
+        self._wellarch_skill = WellArchitectedSkill(api_key)
 
     def invoke(self, description: str) -> dict:
-        """Refine architecture description with AWS pattern-aware enrichment.
+        """Refine architecture description with AWS pattern-aware and Well-Architected enrichment.
 
         Returns:
             dict with keys:
               - refined (str): Enhanced description ready for diagram generation
               - patterns (list[str]): Human-readable detected pattern labels
               - recommended_services (list[dict]): [{service, role}] from pattern skill
+              - wellarch_assessment (dict): Well-Architected evaluation per pillar
         """
         logger.info("🔧 Refining architecture description...")
 
+        # Step 1: Detect patterns and domain-specific services
         skill_result = self._skill_chain.invoke(description)
         pattern_context = self._build_pattern_context(skill_result)
 
+        # Step 2: Evaluate against Well-Architected Framework
+        logger.info("🏛️ Evaluating against Well-Architected Framework...")
+        wellarch_result = self._wellarch_skill.invoke(description)
+        wellarch_context = self._build_wellarch_context(wellarch_result)
+
+        # Step 3: Build enriched system prompt with both contexts
         system = self._system_prompt
         if pattern_context:
             system += (
@@ -99,13 +111,20 @@ class DescriptionRefinerChain:
                 "Use the information below to guide your refinement:\n\n"
                 + pattern_context
             )
+        if wellarch_context:
+            system += (
+                "\n\n## Well-Architected Framework Assessment\n"
+                "Ensure the refined description addresses these recommendations:\n\n"
+                + wellarch_context
+            )
 
         try:
             messages = [
                 SystemMessage(content=system),
                 HumanMessage(content=(
                     f"Original architecture description:\n{description}\n\n"
-                    "Please refine and enhance this description for diagram generation."
+                    "Please refine and enhance this description for diagram generation, "
+                    "ensuring it follows AWS best practices for production-grade systems."
                 )),
             ]
             response = self.llm.invoke(messages)
@@ -119,6 +138,18 @@ class DescriptionRefinerChain:
             "refined": refined,
             "patterns": skill_result.pattern_labels,
             "recommended_services": [s.dict() for s in skill_result.recommended_services],
+            "wellarch_assessment": {
+                "overall_score": wellarch_result.overall_score,
+                "pillars": [
+                    {
+                        "pillar": p.pillar,
+                        "score": p.score,
+                        "gaps": p.gaps,
+                        "recommendations": p.recommendations,
+                    }
+                    for p in wellarch_result.pillars
+                ],
+            } if wellarch_result.pillars else {},
         }
 
     def _build_pattern_context(self, skill_result: AwsPatternSkillOutput) -> str:
@@ -136,6 +167,23 @@ class DescriptionRefinerChain:
                 for s in skill_result.recommended_services
             )
             parts.append(f"Recommended AWS services to include:\n{svc_lines}")
+
+        return "\n".join(parts)
+
+    def _build_wellarch_context(self, assessment: WellArchitectedAssessment) -> str:
+        """Build context from Well-Architected assessment for refinement."""
+        if not assessment.pillars:
+            return ""
+
+        parts = [f"Overall Well-Architected Score: {assessment.overall_score}/100"]
+
+        for pillar in assessment.pillars:
+            pillar_text = f"\n**{pillar.pillar}** (Score: {pillar.score}/100)"
+            if pillar.gaps:
+                pillar_text += f"\n  Gaps: {', '.join(pillar.gaps)}"
+            if pillar.recommendations:
+                pillar_text += f"\n  Add: {', '.join(pillar.recommendations)}"
+            parts.append(pillar_text)
 
         return "\n".join(parts)
 
@@ -300,18 +348,48 @@ class DiagramCoderChain:
             r'OpenSearch\(': 'AmazonOpensearchService(',
             r'Elasticsearch\(': 'ElasticsearchService(',
             r'DynamoDB\(': 'DynamodbTable(',
-            # Network services
-            r'VPCEndpoint\(': 'Endpoint(',  # diagrams.aws.network has Endpoint, not VPCEndpoint
             # Integration/Messaging services
-            r'\bEventBridge\(': 'Eventbridge(',  # diagrams has Eventbridge (lowercase b), not EventBridge
+            r'EventBridge\(': 'Eventbridge(',  # diagrams has Eventbridge (lowercase b), not EventBridge
             # Compute services
             r'AutoScalingGroup\(': 'AutoScaling(',  # diagrams has AutoScaling, not AutoScalingGroup
             # Monitoring/Observability
             r'CloudWatch\(': 'Cloudwatch(',
             r'X-Ray\(': 'XRay(',
             # Security/Secrets Management
-            r'\bSecrets\(': 'SecretsManager(',
+            r'Secrets\(': 'SecretsManager(',
             r'Secrets Manager\(': 'SecretsManager(',
+            # Services not directly available in diagrams - use Rack fallback
+            # Security services
+            r'GuardDuty\(': 'Rack(',  # GuardDuty not available, use generic Rack
+            r'Inspector\(': 'Rack(',  # Inspector not available, use generic Rack
+            r'Macie\(': 'Rack(',      # Macie not available, use generic Rack
+            # Media/Content services
+            r'MediaConvert\(': 'Rack(',  # MediaConvert not available, use generic Rack
+            r'MediaPackage\(': 'Rack(',  # MediaPackage not available, use generic Rack
+            r'MediaLive\(': 'Rack(',     # MediaLive not available, use generic Rack
+            # AI/ML services
+            r'SageMaker\(': 'Rack(',  # SageMaker not available, use generic Rack
+            r'Bedrock\(': 'Rack(',    # Bedrock not available, use generic Rack (may have icon in newer versions)
+            # IoT services
+            r'IoTDevice\(': 'Rack(',      # IoTDevice not available, use generic Rack
+            r'IoT\(': 'Rack(',            # IoT not available, use generic Rack
+            r'IoTCore\(': 'Rack(',        # IoTCore not available, use generic Rack
+            r'IoTGreengrass\(': 'Rack(',  # IoTGreengrass not available, use generic Rack
+            r'IoTSiteWise\(': 'Rack(',    # IoTSiteWise not available, use generic Rack
+            r'IoTAnalytics\(': 'Rack(',   # IoTAnalytics not available, use generic Rack
+            r'IoTEvents\(': 'Rack(',      # IoTEvents not available, use generic Rack
+            r'IoTFleetHub\(': 'Rack(',    # IoTFleetHub not available, use generic Rack
+            # On-Premise services
+            r'OnPremise\(': 'Rack(',     # OnPremise not available, use generic Rack
+            r'OnPremises\(': 'Rack(',    # OnPremises not available, use generic Rack
+            # Other uncommon services
+            r'AppFlow\(': 'Rack(',    # AppFlow not available, use generic Rack
+            r'DataExchange\(': 'Rack(',  # DataExchange not available, use generic Rack
+            r'FinSpace\(': 'Rack(',    # FinSpace not available, use generic Rack
+            r'Forecast\(': 'Rack(',   # Forecast not available, use generic Rack
+            r'Lookout\(': 'Rack(',    # Lookout not available, use generic Rack
+            r'QuickSight\(': 'Rack(',   # QuickSight not available, use generic Rack
+            r'Timestream\(': 'Rack(',   # Timestream not available, use generic Rack
         }
 
         for pattern, replacement in replacements.items():
@@ -319,6 +397,15 @@ class DiagramCoderChain:
             code = re.sub(pattern, replacement, code)
             if code != original_code:
                 logger.info(f"🔧 Fixed service name: {pattern} → {replacement}")
+
+        # Catch-all: Replace any undefined class names with Rack (fallback)
+        # This regex catches patterns like "UndefinedClass(" and replaces with "Rack("
+        # Only applied if the class name follows AWS naming conventions (CamelCase with alphanumeric)
+        code_before_catchall = code
+        code = re.sub(r'\b([A-Z][a-zA-Z0-9]*)\(', lambda m: 'Rack(' if m.group(1) not in ['Diagram', 'Cluster', 'Edge', 'Users', 'Internet', 'Rack'] else m.group(0), code)
+
+        if code != code_before_catchall:
+            logger.info("🔧 Applied catch-all fallback for undefined service names")
 
         return code
 

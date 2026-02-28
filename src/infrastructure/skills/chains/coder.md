@@ -22,6 +22,10 @@ CRITICAL RULES — MUST FOLLOW EXACTLY:
 ═══════════════════════════════════════════════════════════════════════════════
 
 1. **STRING INTEGRITY** — EVERY STRING MUST BE COMPLETE on the same line
+   🚫 DO NOT use unescaped quotes (", ') inside strings
+   🚫 DO NOT split strings across lines
+   ✓ If you need a quote inside a string, use: name = Rack("Service \"With Quote\"") or name = Rack('Service "With Quote"')
+   ✓ For comments with service names, use: # Configure Service (no quotes needed in comments)
 2. **PARENTHESIS BALANCE** — every `(` must have a matching `)`
 3. **RETURN ONLY VALID PYTHON** — no markdown, no ` ``` ` blocks, no explanations
 4. **ONE LINE PER NODE** — never split node creation across lines
@@ -181,7 +185,7 @@ AVAILABLE AWS SYMBOLS — USE EXACT CLASS NAMES (all pre-imported):
 - Route53
 - NATGateway
 - CloudFront
-- Endpoint (for VPC endpoints)
+(Note: VPC Endpoints are too granular for high-level architecture diagrams — use the VPC cluster instead to represent VPC-contained services)
 
 **INTEGRATION:**
 - SQS
@@ -241,13 +245,13 @@ When the blueprint specifies a service, map it to the correct diagrams symbol:
 | Memcached | Elasticache |
 | Kinesis | KinesisDataStreams |
 | EventBridge | Eventbridge |
-| VPC Endpoint | Endpoint |
-| VPCEndpoint | Endpoint |
 | Auto Scaling Group | AutoScaling |
 | AutoScalingGroup | AutoScaling |
 | Secrets Manager | SecretsManager |
 | Secrets | SecretsManager |
 | Certificate Manager | ACM |
+| VPC Endpoint | (Don't use — too granular; instead use VPC cluster) |
+| VPCEndpoint | (Don't use — too granular; instead use VPC cluster) |
 
 If a service in the blueprint does NOT have a direct mapping above, **use `Rack("Service Name")`** as a fallback generic icon.
 
@@ -311,7 +315,7 @@ CRITICAL VALIDATION RULES BEFORE RETURNING CODE:
 - X-Ray ← FORBIDDEN (use XRay)
 - DynamoDB ← FORBIDDEN (use DynamodbTable)
 - EventBridge ← FORBIDDEN (use Eventbridge with lowercase 'b')
-- VPCEndpoint ← FORBIDDEN (use Endpoint)
+- VPCEndpoint or VPCEndpoints ← FORBIDDEN (don't use; too granular for high-level diagrams)
 - AutoScalingGroup ← FORBIDDEN (use AutoScaling, not AutoScalingGroup)
 
 ✅ REQUIRED REPLACEMENTS before returning:
@@ -321,7 +325,7 @@ CRITICAL VALIDATION RULES BEFORE RETURNING CODE:
 4. Search code for "X-Ray(" and replace with "XRay("
 5. Search code for "DynamoDB(" and replace with "DynamodbTable("
 6. Search code for "EventBridge(" and replace with "Eventbridge("
-7. Search code for "VPCEndpoint(" and replace with "Endpoint("
+7. Do NOT use VPCEndpoint or VPCEndpoints (too granular; use VPC cluster instead)
 8. Search code for "AutoScalingGroup(" and replace with "AutoScaling("
 
 ═══════════════════════════════════════════════════════════════════════════════
@@ -338,7 +342,7 @@ FINAL CHECKLIST:
 ✓ NO FORBIDDEN NAMES in code (OpenSearch, Elasticsearch, CloudWatch, X-Ray, DynamoDB, EventBridge, VPCEndpoint, AutoScalingGroup)
 ✓ ALL replacements applied from CRITICAL VALIDATION RULES above
 ✓ Eventbridge is lowercase 'b', not EventBridge
-✓ VPCEndpoint is mapped to Endpoint, not VPCEndpoint
+✓ NO VPCEndpoint or VPCEndpoints (too granular — use VPC cluster instead)
 ✓ AutoScalingGroup is mapped to AutoScaling, not AutoScalingGroup
 ✓ Used mapping guide for any non-standard service names
 ✓ Edge labels describe the purpose of each connection

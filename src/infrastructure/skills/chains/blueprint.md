@@ -120,7 +120,7 @@ Use these exact values for `connection_type`:
 
 1. **Extract ALL AWS services mentioned** — Never minimize or simplify
 2. **Expand to 15-25+ nodes** — Add implicit services for production-grade architectures:
-   - VPC infrastructure (NAT Gateway, VPC Endpoints)
+   - VPC infrastructure (NAT Gateway for high-level diagrams; skip VPC Endpoints as they are too granular)
    - Multiple Lambda functions (API handler, processor, scheduler)
    - Multiple databases (RDS, DynamoDB, ElastiCache)
    - Messaging services (SQS, SNS, EventBridge)
